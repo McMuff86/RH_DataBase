@@ -20,6 +20,7 @@ namespace RH_DataBase.Views
         private TextBox _searchBox;
         private Button _refreshButton;
         private Button _insertButton;
+        private Button _deleteButton;
         private Button _testConnectionButton;
         private Button _addSampleDataButton;
         private ProgressBar _progressBar;
@@ -107,6 +108,7 @@ namespace RH_DataBase.Views
                                 new StackLayoutItem(_statusLabel, true),
                                 new StackLayoutItem(_progressBar, true),
                                 _insertButton,
+                                _deleteButton,
                                 closeButton
                             }
                         }
@@ -150,6 +152,11 @@ namespace RH_DataBase.Views
             _insertButton = new Button { Text = "Ausgewähltes Teil einfügen" };
             _insertButton.Click += (sender, e) => InsertSelectedPart();
             _insertButton.Enabled = false;
+            
+            // Löschen-Button
+            _deleteButton = new Button { Text = "Ausgewähltes Teil löschen", ToolTip = "Löscht das ausgewählte Teil aus der Datenbank" };
+            _deleteButton.Click += (sender, e) => DeleteSelectedPart();
+            _deleteButton.Enabled = false;
             
             // Status-Anzeigen
             _progressBar = new ProgressBar();
@@ -470,11 +477,13 @@ namespace RH_DataBase.Views
                 
                 _statusLabel.Text = $"Teil {selectedPart.Name} ausgewählt | {partDrawings.Count} Zeichnungen";
                 _insertButton.Enabled = true;
+                _deleteButton.Enabled = true;
             }
             else
             {
                 _drawingsGridView.DataStore = null;
                 _insertButton.Enabled = false;
+                _deleteButton.Enabled = false;
             }
         }
         
@@ -535,6 +544,63 @@ namespace RH_DataBase.Views
                         });
                     }
                 });
+            }
+        }
+        
+        private void DeleteSelectedPart()
+        {
+            if (_partsGridView.SelectedItem is Part selectedPart)
+            {
+                // Bestätigungsdialog anzeigen
+                var result = MessageBox.Show(
+                    $"Möchten Sie das Teil '{selectedPart.Name}' wirklich aus der Datenbank löschen?\n\nDiese Aktion kann nicht rückgängig gemacht werden.",
+                    "Teil löschen",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxType.Warning
+                );
+                
+                if (result == DialogResult.Yes)
+                {
+                    // UI-Thread aktualisieren
+                    _statusLabel.Text = $"Lösche Teil {selectedPart.Name}...";
+                    _deleteButton.Enabled = false;
+                    
+                    // Starte den Löschprozess in einem separaten Thread
+                    Task.Run(async () =>
+                    {
+                        try
+                        {
+                            // Teil löschen
+                            await _partsController.DeletePartAsync(selectedPart.Id);
+                            
+                            // UI-Updates auf dem UI-Thread ausführen
+                            Application.Instance.Invoke(() =>
+                            {
+                                _statusLabel.Text = $"Teil {selectedPart.Name} wurde gelöscht";
+                                
+                                // Aktualisiere die Datenliste
+                                LoadDataAsync();
+                            });
+                        }
+                        catch (Exception ex)
+                        {
+                            // UI-Updates auf dem UI-Thread ausführen
+                            Application.Instance.Invoke(() =>
+                            {
+                                _statusLabel.Text = $"Fehler beim Löschen: {ex.Message}";
+                                
+                                MessageBox.Show(
+                                    $"Fehler beim Löschen des Teils:\n{ex.Message}",
+                                    "Löschfehler",
+                                    MessageBoxButtons.OK,
+                                    MessageBoxType.Error
+                                );
+                                
+                                _deleteButton.Enabled = true;
+                            });
+                        }
+                    });
+                }
             }
         }
     }

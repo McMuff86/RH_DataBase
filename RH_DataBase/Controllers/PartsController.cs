@@ -64,6 +64,14 @@ namespace RH_DataBase.Controllers
         }
 
         /// <summary>
+        /// Löscht ein Teil aus der Datenbank anhand seiner ID
+        /// </summary>
+        public async Task DeletePartAsync(int partId)
+        {
+            await _supabaseService.DeletePartAsync(partId);
+        }
+
+        /// <summary>
         /// Fügt ein Teil in das aktive Rhino-Dokument ein
         /// </summary>
         public bool InsertPartIntoDocument(Part part, RhinoDoc doc)
