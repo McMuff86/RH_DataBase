@@ -551,9 +551,20 @@ namespace RH_DataBase.Views
         {
             if (_partsGridView.SelectedItem is Part selectedPart)
             {
+                // Prüfen, ob Zeichnungen für dieses Teil existieren
+                var relatedDrawings = _drawings.Where(d => d.PartId == selectedPart.Id).ToList();
+                string warningMessage = $"Möchten Sie das Teil '{selectedPart.Name}' wirklich aus der Datenbank löschen?";
+                
+                if (relatedDrawings.Count > 0)
+                {
+                    warningMessage += $"\n\nDas Teil hat {relatedDrawings.Count} zugehörige Zeichnung(en), die ebenfalls gelöscht werden.";
+                }
+                
+                warningMessage += "\n\nDiese Aktion kann nicht rückgängig gemacht werden.";
+                
                 // Bestätigungsdialog anzeigen
                 var result = MessageBox.Show(
-                    $"Möchten Sie das Teil '{selectedPart.Name}' wirklich aus der Datenbank löschen?\n\nDiese Aktion kann nicht rückgängig gemacht werden.",
+                    warningMessage,
                     "Teil löschen",
                     MessageBoxButtons.YesNo,
                     MessageBoxType.Warning
@@ -570,7 +581,16 @@ namespace RH_DataBase.Views
                     {
                         try
                         {
-                            // Teil löschen
+                            // Zuerst alle zugehörigen Zeichnungen löschen
+                            if (relatedDrawings.Count > 0)
+                            {
+                                foreach (var drawing in relatedDrawings)
+                                {
+                                    await _partsController.DeleteDrawingAsync(drawing.Id);
+                                }
+                            }
+                            
+                            // Dann das Teil löschen
                             await _partsController.DeletePartAsync(selectedPart.Id);
                             
                             // UI-Updates auf dem UI-Thread ausführen

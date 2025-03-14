@@ -72,6 +72,14 @@ namespace RH_DataBase.Controllers
         }
 
         /// <summary>
+        /// Löscht eine Zeichnung aus der Datenbank anhand ihrer ID
+        /// </summary>
+        public async Task DeleteDrawingAsync(int drawingId)
+        {
+            await _supabaseService.DeleteDrawingAsync(drawingId);
+        }
+
+        /// <summary>
         /// Fügt ein Teil in das aktive Rhino-Dokument ein
         /// </summary>
         public bool InsertPartIntoDocument(Part part, RhinoDoc doc)
