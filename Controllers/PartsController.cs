@@ -17,7 +17,7 @@ namespace RH_DataBase.Controllers
         private static PartsController _instance;
         
         // Standardbucket für die Speicherung von 3DM-Dateien
-        private const string BLOCKS_BUCKET = "blocks";
+        private const string BLOCKS_BUCKET = "uploadrhino";
         // Temporäres Verzeichnis für heruntergeladene Dateien
         private readonly string TempDirectory = Path.Combine(Path.GetTempPath(), "RH_DataBase");
 
