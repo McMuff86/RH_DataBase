@@ -24,6 +24,7 @@
   </PropertyGroup>
   
   <ItemGroup>
+    <PackageReference Include="DotNetEnv" Version="3.1.1" />
     <PackageReference Include="RhinoCommon" Version="8.0.23304.9001" ExcludeAssets="runtime" />
     <PackageReference Include="supabase-csharp" Version="0.14.0" />
     <PackageReference Include="Eto.Forms" Version="2.7.5" />
@@ -33,6 +34,18 @@
   
   <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
     <Reference Include="System.Drawing" />
+  </ItemGroup>
+  
+  <!-- Kopiere .env.local in das Ausgabeverzeichnis -->
+  <ItemGroup>
+    <None Include=".env.local" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  
+  <!-- Stelle sicher dass .env.local nicht im Repository ist -->
+  <ItemGroup>
+    <None Update=".env.local">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
   
 </Project>

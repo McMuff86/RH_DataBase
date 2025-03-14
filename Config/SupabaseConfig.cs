@@ -1,20 +1,60 @@
 using System;
+using System.IO;
+using DotNetEnv;
 
 namespace RH_DataBase.Config
 {
     public static class SupabaseConfig
     {
+        static SupabaseConfig()
+        {
+            // Lade die Umgebungsvariablen aus der .env.local-Datei
+            // Prüfe zuerst den Pfad relativ zum aktuellen Verzeichnis
+            string envPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ".env.local");
+            if (File.Exists(envPath))
+            {
+                Env.Load(envPath);
+            }
+            else
+            {
+                // Alternativ: Versuche, die Datei im Projektverzeichnis zu finden
+                string projectDir = Directory.GetCurrentDirectory();
+                envPath = Path.Combine(projectDir, ".env.local");
+                if (File.Exists(envPath))
+                {
+                    Env.Load(envPath);
+                }
+                else
+                {
+                    // Versuche es noch eine Verzeichnisebene höher
+                    string parentDir = Directory.GetParent(projectDir)?.FullName;
+                    if (parentDir != null)
+                    {
+                        envPath = Path.Combine(parentDir, ".env.local");
+                        if (File.Exists(envPath))
+                        {
+                            Env.Load(envPath);
+                        }
+                    }
+                }
+            }
+        }
+
         // Supabase URL aus der .env.local-Datei
-        public static readonly string SupabaseUrl = "https://vxkzmvugmzjnjiqysnmw.supabase.co";
+        public static readonly string SupabaseUrl = Environment.GetEnvironmentVariable("NEXT_PUBLIC_SUPABASE_URL") 
+            ?? "https://vxkzmvugmzjnjiqysnmw.supabase.co"; // Fallback-Wert nur als Notlösung
         
         // Anonymer Schlüssel (anon key) aus der .env.local-Datei - eingeschränkte Berechtigungen
-        public static readonly string SupabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ4a3ptdnVnbXpqbmppcXlzbm13Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDE3MTYwNTYsImV4cCI6MjA1NzI5MjA1Nn0.BF2WKpv1gdX7HFSx11Q6w-V8K09mVoD2XuDqRwgX0D4";
+        public static readonly string SupabaseAnonKey = Environment.GetEnvironmentVariable("NEXT_PUBLIC_SUPABASE_ANON_KEY") 
+            ?? string.Empty; // Leerer String als Fallback
         
         // Service Role Key für administrative Operationen (empfohlen für Bucket-Operationen) - volle Berechtigungen
-        public static readonly string SupabaseServiceKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ4a3ptdnVnbXpqbmppcXlzbm13Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0MTcxNjA1NiwiZXhwIjoyMDU3MjkyMDU2fQ.J893uCqFnI-SigJnSVvNRbgTkNuODzmr0IW_1UxPAl0";
+        public static readonly string SupabaseServiceKey = Environment.GetEnvironmentVariable("SUPABASE_SERVICE_ROLE_KEY") 
+            ?? string.Empty; // Leerer String als Fallback
         
         // JWT Secret für benutzerdefinierte Authentifizierung
-        public static readonly string JwtSecret = "WMOk0aqFsvVJfBS8CJa8mFOiEQ7DkgQRFybWIwtEPvh9tR9FOZ0AjMYj9zFdj5FB1c6ocMSDb9ZxS/Uhzzy47w==";
+        public static readonly string JwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET") 
+            ?? string.Empty; // Leerer String als Fallback
         
         // Der zu verwendende Standard-Schlüssel - für mehr Rechte ServiceKey verwenden
         public static readonly string DefaultKey = SupabaseServiceKey;

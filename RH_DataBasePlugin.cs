@@ -31,6 +31,28 @@ namespace RH_DataBase
         /// </summary>
         protected override LoadReturnCode OnLoad(ref string errorMessage)
         {
+            // Prüfe, ob die Konfiguration aus .env.local erfolgreich geladen wurde
+            try 
+            {
+                // Zeige Konfigurationsstatus - nur Debug-Info, keine sensiblen Daten
+                bool supabaseUrlLoaded = !string.IsNullOrEmpty(Config.SupabaseConfig.SupabaseUrl);
+                bool anonKeyLoaded = !string.IsNullOrEmpty(Config.SupabaseConfig.SupabaseAnonKey);
+                bool serviceKeyLoaded = !string.IsNullOrEmpty(Config.SupabaseConfig.SupabaseServiceKey);
+                bool jwtSecretLoaded = !string.IsNullOrEmpty(Config.SupabaseConfig.JwtSecret);
+                
+                RhinoApp.WriteLine($"Konfigurationsstatus: URL={supabaseUrlLoaded}, AnonKey={anonKeyLoaded}, ServiceKey={serviceKeyLoaded}, JWT={jwtSecretLoaded}");
+                
+                if (!anonKeyLoaded || !serviceKeyLoaded)
+                {
+                    RhinoApp.WriteLine("WARNUNG: Einige Konfigurationswerte konnten nicht aus .env.local geladen werden.");
+                    RhinoApp.WriteLine("Die .env.local-Datei sollte im Verzeichnis der Anwendung liegen.");
+                }
+            }
+            catch (Exception ex)
+            {
+                RhinoApp.WriteLine($"Fehler beim Laden der Konfiguration: {ex.Message}");
+            }
+            
             // Test the database connection on plugin startup
             TestDatabaseConnection();
             
