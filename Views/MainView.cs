@@ -26,13 +26,13 @@ namespace RH_DataBase.Views
         private Button _deleteButton;
         private Button _deleteDrawingButton;
         private Button _exportBlockButton;
-        private Button _createBlockButton;
         private Button _importBlockButton;
         private Button _autoImportButton;
         private Button _testConnectionButton;
-        private Button _addSampleDataButton;
         private Button _importDrawingButton;
         private Button _openDrawingButton;
+        private Button _importFolderButton;
+        private Button _importMultipleFilesButton;
         private ProgressBar _progressBar;
         private Label _statusLabel;
         
@@ -78,7 +78,6 @@ namespace RH_DataBase.Views
                                         Items =
                                         {
                                             new StackLayoutItem(_testConnectionButton, true),
-                                            new StackLayoutItem(_addSampleDataButton, true)
                                         }
                                     }
                                 ),
@@ -112,7 +111,6 @@ namespace RH_DataBase.Views
                                 _insertButton,
                                 _deleteButton,
                                 _exportBlockButton,
-                                _createBlockButton,
                                 _importBlockButton,
                                 _autoImportButton
                             }
@@ -120,7 +118,7 @@ namespace RH_DataBase.Views
                     ),
                     
                     // Zeichnungen-Grid mit Überschrift
-                    new TableRow(new Label { Text = "Zeichnungen", Font = new Eto.Drawing.Font(FontFamilies.Sans, 14, FontStyle.Bold) }),
+                    new TableRow(new Label { Text = "PDF", Font = new Eto.Drawing.Font(FontFamilies.Sans, 14, FontStyle.Bold) }),
                     new TableRow(_drawingsGridView) { ScaleHeight = true },
                     new TableRow(
                         new StackLayout
@@ -130,6 +128,8 @@ namespace RH_DataBase.Views
                             Items =
                             {
                                 _importDrawingButton,
+                                _importFolderButton,
+                                _importMultipleFilesButton,
                                 _openDrawingButton,
                                 _deleteDrawingButton
                             }
@@ -203,9 +203,6 @@ namespace RH_DataBase.Views
             _testConnectionButton = new Button { Text = "Verbindung testen" };
             _testConnectionButton.Click += (sender, e) => TestConnectionAsync();
             
-            _addSampleDataButton = new Button { Text = "Beispieldaten hinzufügen" };
-            _addSampleDataButton.Click += (sender, e) => AddSampleDataAsync();
-            
             // Such-Box
             _searchBox = new TextBox { PlaceholderText = "Teile nach Namen suchen..." };
             _searchBox.KeyDown += (sender, e) => {
@@ -230,26 +227,30 @@ namespace RH_DataBase.Views
             _deleteButton.Enabled = false;
             
             // Zeichnung-Löschen-Button
-            _deleteDrawingButton = new Button { Text = "Zeichnung löschen", ToolTip = "Löscht die ausgewählte Zeichnung aus der Datenbank" };
+            _deleteDrawingButton = new Button { Text = "PDF löschen", ToolTip = "Löscht das ausgewählte PDF aus der Datenbank" };
             _deleteDrawingButton.Click += (sender, e) => DeleteSelectedDrawing();
             _deleteDrawingButton.Enabled = false;
             
             // Button zum Importieren einer Zeichnung
-            _importDrawingButton = new Button { Text = "Zeichnung importieren", ToolTip = "Lädt eine Zeichnungsdatei in die Datenbank hoch" };
+            _importDrawingButton = new Button { Text = "PDF importieren", ToolTip = "Lädt eine PDF-Datei in die Datenbank hoch" };
             _importDrawingButton.Click += (sender, e) => ImportDrawingFromFile();
             
+            // Button zum Importieren eines Ordners
+            _importFolderButton = new Button { Text = "Ordner importieren", ToolTip = "Lädt alle Dateien aus einem Ordner in die Datenbank hoch" };
+            _importFolderButton.Click += (sender, e) => ImportFolderFiles();
+            
+            // Button zum Importieren mehrerer ausgewählter Dateien
+            _importMultipleFilesButton = new Button { Text = "Mehrere Dateien", ToolTip = "Lädt mehrere ausgewählte Dateien in die Datenbank hoch" };
+            _importMultipleFilesButton.Click += (sender, e) => ImportMultipleFiles();
+            
             // Button zum Öffnen einer Zeichnung
-            _openDrawingButton = new Button { Text = "Zeichnung öffnen", ToolTip = "Öffnet die ausgewählte Zeichnung in Rhino" };
+            _openDrawingButton = new Button { Text = "PDF öffnen", ToolTip = "Öffnet das ausgewählte PDF" };
             _openDrawingButton.Click += (sender, e) => OpenSelectedDrawing();
             _openDrawingButton.Enabled = false;
             
             // Block-Export-Button
             _exportBlockButton = new Button { Text = "Block exportieren", ToolTip = "Exportiert einen Block aus Rhino in die Datenbank" };
             _exportBlockButton.Click += (sender, e) => ExportBlockDefinition();
-            
-            // Block-Erstellen-Button
-            _createBlockButton = new Button { Text = "Block aus Auswahl erstellen", ToolTip = "Erstellt einen Block aus ausgewählten Objekten und exportiert ihn in die Datenbank" };
-            _createBlockButton.Click += (sender, e) => CreateBlockFromSelection();
             
             // Import-Block-Button
             _importBlockButton = new Button { Text = "Block importieren", ToolTip = "Lädt einen Block aus der Datenbank in Rhino" };
@@ -526,72 +527,6 @@ namespace RH_DataBase.Views
             });
         }
         
-        private void AddSampleDataAsync()
-        {
-            // UI-Thread aktualisieren
-                _statusLabel.Text = "Füge Beispieldaten hinzu...";
-                _progressBar.Indeterminate = true;
-                _addSampleDataButton.Enabled = false;
-                
-            // Starte den Prozess in einem separaten Thread
-            Task.Run(async () => 
-            {
-                try
-                {
-                bool success = await _testDataController.AddSampleDataAsync();
-                
-                    // UI-Updates auf dem UI-Thread ausführen
-                    await Application.Instance.InvokeAsync(async () =>
-                    {
-                if (success)
-                {
-                    _statusLabel.Text = "Beispieldaten wurden hinzugefügt";
-                    MessageBox.Show(
-                        "Die Beispieldaten wurden erfolgreich zur Datenbank hinzugefügt.",
-                        "Beispieldaten",
-                        MessageBoxButtons.OK,
-                        MessageBoxType.Information
-                    );
-                    
-                    // Aktualisiere die Anzeige
-                    await Task.Delay(500); // Kurz warten, damit die Daten in der Datenbank aktualisiert werden
-                    LoadDataAsync();
-                }
-                else
-                {
-                    _statusLabel.Text = "Fehler beim Hinzufügen der Beispieldaten";
-                    MessageBox.Show(
-                        "Die Beispieldaten konnten nicht hinzugefügt werden.",
-                        "Beispieldaten",
-                        MessageBoxButtons.OK,
-                        MessageBoxType.Error
-                    );
-                }
-                        
-                        _progressBar.Indeterminate = false;
-                        _addSampleDataButton.Enabled = true;
-                    });
-            }
-            catch (Exception ex)
-                {
-                    // UI-Updates auf dem UI-Thread ausführen
-                    Application.Instance.Invoke(() =>
-            {
-                _statusLabel.Text = $"Fehler: {ex.Message}";
-                MessageBox.Show(
-                    "Fehler beim Hinzufügen der Beispieldaten:\n" + ex.Message,
-                            "Datenfehler",
-                    MessageBoxButtons.OK,
-                    MessageBoxType.Error
-                );
-                        
-                _progressBar.Indeterminate = false;
-                _addSampleDataButton.Enabled = true;
-                    });
-            }
-            });
-        }
-        
         private async void SearchPartsAsync(string searchTerm)
         {
             try
@@ -823,15 +758,15 @@ namespace RH_DataBase.Views
             }
         }
 
-        // Neue Methode zum Löschen der ausgewählten Zeichnung
+        // Neue Methode zum Löschen des ausgewählten PDFs
         private void DeleteSelectedDrawing()
         {
             if (_drawingsGridView.SelectedItem is Drawing selectedDrawing)
             {
                 // Bestätigungsdialog anzeigen
                 var result = MessageBox.Show(
-                    $"Möchten Sie die Zeichnung '{selectedDrawing.Title}' wirklich aus der Datenbank löschen?\n\nDiese Aktion kann nicht rückgängig gemacht werden.",
-                    "Zeichnung löschen",
+                    $"Möchten Sie das PDF '{selectedDrawing.Title}' wirklich aus der Datenbank löschen?\n\nDiese Aktion kann nicht rückgängig gemacht werden.",
+                    "PDF löschen",
                     MessageBoxButtons.YesNo,
                     MessageBoxType.Warning
                 );
@@ -839,7 +774,7 @@ namespace RH_DataBase.Views
                 if (result == DialogResult.Yes)
                 {
                     // UI-Thread aktualisieren
-                    _statusLabel.Text = $"Lösche Zeichnung {selectedDrawing.Title}...";
+                    _statusLabel.Text = $"Lösche PDF {selectedDrawing.Title}...";
                     _deleteDrawingButton.Enabled = false;
                     
                     // Starte den Löschprozess in einem separaten Thread
@@ -853,7 +788,7 @@ namespace RH_DataBase.Views
                             // UI-Updates auf dem UI-Thread ausführen
                             await Application.Instance.InvokeAsync(() =>
                             {
-                                _statusLabel.Text = $"Zeichnung {selectedDrawing.Title} wurde gelöscht";
+                                _statusLabel.Text = $"PDF {selectedDrawing.Title} wurde gelöscht";
                                 
                                 // Aktualisiere nur die Zeichnungsliste
                                 if (_partsGridView.SelectedItem is Part selectedPart)
@@ -1127,245 +1062,7 @@ namespace RH_DataBase.Views
                 );
             }
         }
-
-        // Neue Methode zum Erstellen eines Blocks aus ausgewählten Objekten
-        private async void CreateBlockFromSelection()
-        {
-            try
-            {
-                var doc = RhinoDoc.ActiveDoc;
-                if (doc == null)
-                {
-                    MessageBox.Show(
-                        "Es ist kein aktives Rhino-Dokument geöffnet.",
-                        "Fehler",
-                        MessageBoxButtons.OK,
-                        MessageBoxType.Error
-                    );
-                    return;
-                }
-
-                // Hole ausgewählte Objekte
-                var selectedObjects = doc.Objects.GetSelectedObjects(false, false);
-                
-                // Zähle die Objekte sicher
-                int objectCount = 0;
-                if (selectedObjects != null)
-                {
-                    objectCount = selectedObjects.Count();
-                }
-                
-                if (objectCount == 0)
-                {
-                    MessageBox.Show(
-                        "Bitte wählen Sie mindestens ein Objekt in Rhino aus.",
-                        "Keine Auswahl",
-                        MessageBoxButtons.OK,
-                        MessageBoxType.Warning
-                    );
-                    return;
-                }
-
-                RhinoApp.WriteLine($"Ausgewählte Objekte: {objectCount}");
-
-                // Sammle Object-IDs
-                var objectIds = new List<Guid>();
-                foreach (var obj in selectedObjects)
-                {
-                    objectIds.Add(obj.Id);
-                    RhinoApp.WriteLine($"  - Objekt hinzugefügt: {obj.Id} ({obj.Geometry?.GetType().Name ?? "unbekannt"})");
-                }
-
-                // Erstelle einen Dialog für die Block-Erstellung
-                var dialog = new Dialog
-                {
-                    Title = "Block aus Auswahl erstellen",
-                    MinimumSize = new Size(500, 400),
-                    Padding = new Padding(10)
-                };
-
-                // Beschreibungstext
-                var descriptionPanel = new Panel();
-                var descriptionLabel = new Label
-                {
-                    Text = $"Sie erstellen einen Block aus {objectCount} ausgewählten Objekten." +
-                           $"\nBitte geben Sie die Metadaten für den Block ein."
-                };
-                descriptionPanel.Content = descriptionLabel;
-
-                // Eingabefelder für Block-Metadaten mit Labels
-                var nameLabel = new Label { Text = "Name:" };
-                var nameTextBox = new TextBox { PlaceholderText = "Name des Blocks" };
-                
-                var descriptionTextLabel = new Label { Text = "Beschreibung:" };
-                var descriptionTextBox = new TextBox { PlaceholderText = "Beschreibung des Blocks" };
-                
-                var categoryLabel = new Label { Text = "Kategorie:" };
-                var categoryTextBox = new TextBox { PlaceholderText = "z.B. Möbel, Armaturen, etc." };
-                
-                var materialLabel = new Label { Text = "Material:" };
-                var materialTextBox = new TextBox { PlaceholderText = "z.B. Holz, Metall, etc." };
-
-                // OK und Abbrechen Buttons
-                var okButton = new Button { Text = "Erstellen" };
-                var cancelButton = new Button { Text = "Abbrechen" };
-
-                // Layout erstellen
-                var layout = new TableLayout
-                {
-                    Padding = new Padding(10),
-                    Spacing = new Size(5, 10),
-                    Rows =
-                    {
-                        new TableRow(descriptionPanel),
-                        new TableRow(nameLabel),
-                        new TableRow(nameTextBox),
-                        new TableRow(descriptionTextLabel),
-                        new TableRow(descriptionTextBox),
-                        new TableRow(categoryLabel),
-                        new TableRow(categoryTextBox),
-                        new TableRow(materialLabel),
-                        new TableRow(materialTextBox),
-                        new TableRow(
-                            new TableLayout
-                            {
-                                Padding = new Padding(0, 10, 0, 0),
-                                Spacing = new Size(5, 0),
-                                Rows = { new TableRow(null, cancelButton, okButton) }
-                            }
-                        )
-                    }
-                };
-
-                dialog.Content = layout;
-                
-                // Event-Handler
-                cancelButton.Click += (sender, e) => 
-                {
-                    RhinoApp.WriteLine("Block-Erstellung abgebrochen");
-                    dialog.Close();
-                };
-                
-                okButton.Click += async (sender, e) => 
-                {
-                    try
-                    {
-                        string name = nameTextBox.Text.Trim();
-                        string description = descriptionTextBox.Text.Trim();
-                        string category = categoryTextBox.Text.Trim();
-                        string material = materialTextBox.Text.Trim();
-                        
-                        if (string.IsNullOrWhiteSpace(name))
-                        {
-                            MessageBox.Show(
-                                "Bitte geben Sie einen Namen für den Block an.",
-                                "Fehlende Daten",
-                                MessageBoxButtons.OK,
-                                MessageBoxType.Warning
-                            );
-                            return;
-                        }
-                        
-                        // Dialog schließen, bevor wir mit der Abfrage fortfahren
-                        dialog.Close();
-                        
-                        // Frage nach dem Basispunkt für den Block
-                        RhinoApp.WriteLine("Wählen Sie den Basispunkt für den Block:");
-                        Point3d basePoint;
-                        var getBasePointResult = Rhino.Input.RhinoGet.GetPoint("Basispunkt für den Block wählen", false, out basePoint);
-                        if (getBasePointResult != Rhino.Commands.Result.Success)
-                        {
-                            RhinoApp.WriteLine("Block-Erstellung abgebrochen: Kein Basispunkt ausgewählt");
-                            _statusLabel.Text = "Block-Erstellung abgebrochen";
-                            return;
-                        }
-                        
-                        RhinoApp.WriteLine($"Basispunkt ausgewählt: {basePoint}");
-                        
-                        // UI aktualisieren
-                        _statusLabel.Text = $"Erstelle Block '{name}'...";
-                        _progressBar.Indeterminate = true;
-                        
-                        // Block erstellen und in die Datenbank speichern
-                                var savedPart = await _partsController.CreateBlockFromSelectionAsync(
-                                    doc,
-                                    objectIds,
-                                    name,
-                                    description,
-                                    category,
-                                    material,
-                                    basePoint
-                                );
-                                
-                                // UI-Updates auf dem UI-Thread ausführen
-                                await Application.Instance.InvokeAsync(() =>
-                                {
-                                    _progressBar.Indeterminate = false;
-                                    
-                            if (savedPart != null)
-                            {
-                                _statusLabel.Text = $"Block '{name}' erfolgreich erstellt und gespeichert";
-                                RhinoApp.WriteLine($"Block '{name}' erfolgreich erstellt und in Datenbank gespeichert");
-                                
-                                // Aktualisiere die Teileliste
-                                LoadDataAsync();
-                            }
-                            else
-                            {
-                                _statusLabel.Text = "Fehler beim Erstellen des Blocks";
-                                    MessageBox.Show(
-                                    "Der Block wurde erstellt, konnte aber nicht in der Datenbank gespeichert werden.",
-                                    "Fehler beim Speichern",
-                                    MessageBoxButtons.OK,
-                                    MessageBoxType.Error
-                                );
-                            }
-                        });
-                    }
-                    catch (Exception ex)
-                    {
-                        _progressBar.Indeterminate = false;
-                        _statusLabel.Text = "Fehler bei der Block-Erstellung";
-                        
-                        RhinoApp.WriteLine($"Fehler bei der Block-Erstellung: {ex.Message}");
-                        if (ex.InnerException != null)
-                        {
-                            RhinoApp.WriteLine($"Details: {ex.InnerException.Message}");
-                        }
-                        
-                        MessageBox.Show(
-                            $"Fehler beim Erstellen des Blocks: {ex.Message}",
-                            "Fehler",
-                            MessageBoxButtons.OK,
-                            MessageBoxType.Error
-                        );
-                    }
-                };
-                
-                // Dialog anzeigen
-                dialog.ShowModal(this);
-            }
-            catch (Exception ex)
-            {
-                _progressBar.Indeterminate = false;
-                _statusLabel.Text = "Fehler bei der Block-Erstellung";
-                
-                RhinoApp.WriteLine($"Fehler bei der Block-Erstellung: {ex.Message}");
-                if (ex.InnerException != null)
-                {
-                    RhinoApp.WriteLine($"Details: {ex.InnerException.Message}");
-                }
-                
-                MessageBox.Show(
-                    $"Fehler beim Erstellen des Blocks: {ex.Message}",
-                    "Fehler",
-                    MessageBoxButtons.OK,
-                    MessageBoxType.Error
-                );
-            }
-        }
-
-        // Methode zum Importieren einer Zeichnung aus einer Datei
+        // Methode zum Importieren eines PDFs aus einer Datei
         private void ImportDrawingFromFile()
         {
             try
@@ -1392,8 +1089,8 @@ namespace RH_DataBase.Views
                 // Erstelle einen Dialog für den Datei-Import
                 var openFileDialog = new OpenFileDialog
                 {
-                    Title = "Zeichnungsdatei auswählen",
-                    Filters = { new FileFilter("Rhino-Dateien", "*.3dm") },
+                    Title = "PDF-Datei auswählen",
+                    Filters = { new FileFilter("PDF-Dateien", "*.pdf") },
                     MultiSelect = false
                 };
 
@@ -1404,17 +1101,17 @@ namespace RH_DataBase.Views
                     // Erstelle einen Dialog für die Zeichnungs-Metadaten
                     var dialog = new Dialog
                     {
-                        Title = "Zeichnung importieren",
+                        Title = "PDF importieren",
                         MinimumSize = new Size(500, 400),
                         Padding = new Padding(10)
                     };
 
-                    // Eingabefelder für Zeichnungs-Metadaten
+                    // Eingabefelder für PDF-Metadaten
                     var titleLabel = new Label { Text = "Titel:" };
                     var titleTextBox = new TextBox { Text = Path.GetFileNameWithoutExtension(filePath) };
                     
-                    var drawingNumberLabel = new Label { Text = "Zeichnungsnummer:" };
-                    var drawingNumberTextBox = new TextBox { PlaceholderText = "z.B. Z-1001" };
+                    var drawingNumberLabel = new Label { Text = "Zeichnungsnummer (optional):" };
+                    var drawingNumberTextBox = new TextBox { PlaceholderText = "Wird automatisch generiert, wenn leer" };
                     
                     var revisionLabel = new Label { Text = "Revision:" };
                     var revisionTextBox = new TextBox { Text = "A", PlaceholderText = "z.B. A, 1.0, etc." };
@@ -1467,18 +1164,7 @@ namespace RH_DataBase.Views
                             if (string.IsNullOrWhiteSpace(title))
                             {
                                 MessageBox.Show(
-                                    "Bitte geben Sie einen Titel für die Zeichnung an.",
-                                    "Fehlende Daten",
-                                    MessageBoxButtons.OK,
-                                    MessageBoxType.Warning
-                                );
-                                return;
-                            }
-                            
-                            if (string.IsNullOrWhiteSpace(drawingNumber))
-                            {
-                                MessageBox.Show(
-                                    "Bitte geben Sie eine Zeichnungsnummer an.",
+                                    "Bitte geben Sie einen Titel für das PDF an.",
                                     "Fehlende Daten",
                                     MessageBoxButtons.OK,
                                     MessageBoxType.Warning
@@ -1490,7 +1176,7 @@ namespace RH_DataBase.Views
                             dialog.Close();
                             
                             // UI aktualisieren
-                            _statusLabel.Text = $"Importiere Zeichnung {title}...";
+                            _statusLabel.Text = $"Importiere PDF {title}...";
                             _progressBar.Indeterminate = true;
                             
                             // Bestimme die Teil-ID, falls ein Teil ausgewählt wurde
@@ -1521,10 +1207,10 @@ namespace RH_DataBase.Views
                                     await Application.Instance.InvokeAsync(() => 
                                     {
                                         _progressBar.Indeterminate = false;
-                                        _statusLabel.Text = $"Zeichnung {title} erfolgreich importiert";
+                                        _statusLabel.Text = $"PDF {title} erfolgreich importiert";
                                         
                                         MessageBox.Show(
-                                            $"Zeichnung {title} wurde erfolgreich in die Datenbank importiert.",
+                                            $"PDF {title} wurde erfolgreich in die Datenbank importiert.",
                                             "Import erfolgreich",
                                         MessageBoxButtons.OK,
                                         MessageBoxType.Information
@@ -1543,7 +1229,7 @@ namespace RH_DataBase.Views
                                         _statusLabel.Text = $"Fehler beim Importieren: {ex.Message}";
                                     
                                     MessageBox.Show(
-                                            $"Fehler beim Importieren der Zeichnung:\n{ex.Message}",
+                                            $"Fehler beim Importieren des PDFs:\n{ex.Message}",
                                             "Importfehler",
                                         MessageBoxButtons.OK,
                                         MessageBoxType.Error
@@ -1579,11 +1265,11 @@ namespace RH_DataBase.Views
                             new TableRow(partLabel),
                             new TableRow(partDropDown),
                             new TableRow(
-                                new TableLayout
+                                new StackLayout
                                 {
-                                    Padding = new Padding(0, 10, 0, 0),
-                                    Spacing = new Size(5, 0),
-                                    Rows = { new TableRow(null, cancelButton, okButton) }
+                                    Orientation = Orientation.Horizontal,
+                                    Spacing = 5,
+                                Items = { null, cancelButton, okButton }
                                 }
                             )
                         }
@@ -1605,79 +1291,87 @@ namespace RH_DataBase.Views
             }
         }
 
-        // Methode zum Öffnen einer ausgewählten Zeichnung
+        // Methode zum Öffnen eines ausgewählten PDFs
         private void OpenSelectedDrawing()
         {
             if (_drawingsGridView.SelectedItem is Drawing selectedDrawing)
             {
-                var doc = RhinoDoc.ActiveDoc;
-                if (doc == null)
-                {
-                    MessageBox.Show(
-                        "Es ist kein aktives Rhino-Dokument geöffnet.",
-                        "Fehler",
-                        MessageBoxButtons.OK,
-                        MessageBoxType.Error
-                    );
-                    return;
-                }
-
                 // UI aktualisieren
-                _statusLabel.Text = $"Öffne Zeichnung {selectedDrawing.Title}...";
+                _statusLabel.Text = $"Öffne PDF {selectedDrawing.Title}...";
                 _progressBar.Indeterminate = true;
                 _openDrawingButton.Enabled = false;
                 
-                // Phase 1: Vorbereitung im Hintergrund-Thread
+                // Starte den Prozess in einem separaten Thread
                 Task.Run(async () => 
                 {
                     try
                     {
-                        // Verwende die neue Vorbereitungsmethode
-                        var result = await _partsController.PrepareDrawingImportAsync(selectedDrawing, doc);
-                        int blockId = result.blockId;
-                        string tempFilePath = result.tempFilePath;
+                        // Die Datei herunterladen
+                        string tempFilePath = await _partsController.DownloadDrawingFileAsync(selectedDrawing);
                         
-                        // Phase 2: UI-Interaktion im UI-Thread
+                        if (string.IsNullOrEmpty(tempFilePath))
+                        {
+                            await Application.Instance.InvokeAsync(() => 
+                            {
+                                _progressBar.Indeterminate = false;
+                                _openDrawingButton.Enabled = true;
+                                _statusLabel.Text = "Fehler beim Herunterladen der PDF-Datei";
+                                
+                                MessageBox.Show(
+                                    "Die PDF-Datei konnte nicht heruntergeladen werden.",
+                                    "Fehler",
+                                    MessageBoxButtons.OK,
+                                    MessageBoxType.Error
+                                );
+                            });
+                            return;
+                        }
+                        
+                        // Öffne die Datei mit dem Standard-Programm
                         await Application.Instance.InvokeAsync(() => 
                         {
                             try
                             {
-                                _statusLabel.Text = $"Wählen Sie den Einfügepunkt für {selectedDrawing.Title}...";
-                                
-                                // Diese Methode enthält die Benutzerinteraktion und muss im UI-Thread laufen
-                                bool success = _partsController.CompleteDrawingImport(selectedDrawing, doc, blockId);
+                                // Versuche, die Datei mit der Standardanwendung zu öffnen
+                                var processInfo = new System.Diagnostics.ProcessStartInfo(tempFilePath)
+                                {
+                                    UseShellExecute = true
+                                };
+                                System.Diagnostics.Process.Start(processInfo);
                                 
                                 _progressBar.Indeterminate = false;
                                 _openDrawingButton.Enabled = true;
-                                
-                                if (success)
+                                _statusLabel.Text = $"PDF {selectedDrawing.Title} wurde mit der Standardanwendung geöffnet";
+                            }
+                            catch (Exception ex)
+                            {
+                                // Falls es fehlschlägt, versuche Chrome zu verwenden
+                                try
                                 {
-                                    _statusLabel.Text = $"Zeichnung {selectedDrawing.Title} erfolgreich geöffnet";
+                                    string chrome = @"C:\Program Files\Google\Chrome\Application\chrome.exe";
+                                    if (File.Exists(chrome))
+                                    {
+                                        System.Diagnostics.Process.Start(chrome, tempFilePath);
+                                        _statusLabel.Text = $"PDF {selectedDrawing.Title} wurde mit Chrome geöffnet";
+                                    }
+                                    else
+                                    {
+                                        throw new Exception("Chrome wurde nicht gefunden");
+                                    }
                                 }
-                                else
+                                catch (Exception chromeEx)
                                 {
-                                    _statusLabel.Text = "Fehler beim Öffnen der Zeichnung";
+                                    _progressBar.Indeterminate = false;
+                                    _openDrawingButton.Enabled = true;
+                                    _statusLabel.Text = $"Fehler beim Öffnen des PDFs";
                                     
                                     MessageBox.Show(
-                                        "Die Zeichnung konnte nicht in Rhino geöffnet werden.",
+                                        $"Fehler beim Öffnen der PDF-Datei:\n{ex.Message}\n\nVersuche mit Chrome fehlgeschlagen:\n{chromeEx.Message}\n\nDie Datei wurde nach {tempFilePath} heruntergeladen.",
                                         "Öffnungsfehler",
                                         MessageBoxButtons.OK,
                                         MessageBoxType.Error
                                     );
                                 }
-                            }
-                            catch (Exception ex)
-                            {
-                                _progressBar.Indeterminate = false;
-                                _openDrawingButton.Enabled = true;
-                                _statusLabel.Text = $"Fehler: {ex.Message}";
-                                
-                                MessageBox.Show(
-                                    $"Fehler beim Öffnen der Zeichnung:\n{ex.Message}",
-                                    "Öffnungsfehler",
-                                    MessageBoxButtons.OK,
-                                    MessageBoxType.Error
-                                );
                             }
                         });
                     }
@@ -1691,7 +1385,7 @@ namespace RH_DataBase.Views
                             _statusLabel.Text = $"Fehler: {ex.Message}";
                             
                             MessageBox.Show(
-                                $"Fehler beim Öffnen der Zeichnung:\n{ex.Message}",
+                                $"Fehler beim Öffnen der PDF-Datei:\n{ex.Message}",
                                 "Öffnungsfehler",
                                 MessageBoxButtons.OK,
                                 MessageBoxType.Error
@@ -2042,9 +1736,9 @@ namespace RH_DataBase.Views
                             );
                         }
                     });
-            }
-            catch (Exception ex)
-            {
+                }
+                catch (Exception ex)
+                {
                     // UI-Updates auf dem UI-Thread ausführen
                     await Application.Instance.InvokeAsync(() =>
                     {
@@ -2059,8 +1753,406 @@ namespace RH_DataBase.Views
                     MessageBoxType.Error
                 );
                     });
-            }
+                }
             });
+        }
+
+        // Methode zum Importieren eines ganzen Ordners
+        private void ImportFolderFiles()
+        {
+            try
+            {
+                var doc = RhinoDoc.ActiveDoc;
+                if (doc == null)
+                {
+                    MessageBox.Show(
+                        "Es ist kein aktives Rhino-Dokument geöffnet.",
+                        "Fehler",
+                        MessageBoxButtons.OK,
+                        MessageBoxType.Error
+                    );
+                    return;
+                }
+
+                // Erstelle einen Dialog für die Ordnerauswahl
+                var folderBrowserDialog = new SelectFolderDialog
+                {
+                    Title = "Ordner mit PDF-Dateien auswählen"
+                };
+
+                if (folderBrowserDialog.ShowDialog(this) == DialogResult.Ok)
+                {
+                    string folderPath = folderBrowserDialog.Directory;
+                    
+                    // Suche alle .3dm Dateien im Ordner
+                    string[] filePaths = Directory.GetFiles(folderPath, "*.3dm", SearchOption.TopDirectoryOnly);
+                    // Suche alle .pdf Dateien im Ordner
+                    string[] pdfFilePaths = Directory.GetFiles(folderPath, "*.pdf", SearchOption.TopDirectoryOnly);
+                    
+                    if (filePaths.Length == 0 && pdfFilePaths.Length == 0)
+                    {
+                        MessageBox.Show(
+                            "Der ausgewählte Ordner enthält keine .3dm oder .pdf Dateien.",
+                            "Keine Dateien gefunden",
+                            MessageBoxButtons.OK,
+                            MessageBoxType.Warning
+                        );
+                        return;
+                    }
+
+                    // Suche nur .pdf Dateien im Ordner
+                    pdfFilePaths = Directory.GetFiles(folderPath, "*.pdf", SearchOption.TopDirectoryOnly);
+                    
+                    if (pdfFilePaths.Length == 0)
+                    {
+                        MessageBox.Show(
+                            "Der ausgewählte Ordner enthält keine .pdf Dateien.",
+                            "Keine Dateien gefunden",
+                            MessageBoxButtons.OK,
+                            MessageBoxType.Warning
+                        );
+                        return;
+                    }
+
+                    // Erstelle einen Dialog zur Bestätigung
+                    var confirmDialog = new Dialog
+                    {
+                        Title = "Dateien importieren",
+                        Width = 500,
+                        Height = 400,
+                        Padding = new Padding(10)
+                    };
+
+                    // Eine ListBox zum Anzeigen der gefundenen Dateien
+                    var filesListBox = new ListBox();
+                    foreach (var file in pdfFilePaths)
+                    {
+                        filesListBox.Items.Add(Path.GetFileName(file));
+                    }
+
+                    // Beschreibungstext
+                    var descriptionLabel = new Label
+                    {
+                        Text = $"Es wurden {pdfFilePaths.Length} PDF-Dateien im ausgewählten Ordner gefunden. " +
+                               "Möchten Sie diese Dateien in die Datenbank importieren?"
+                    };
+
+                    // Checkbox für Aktualisierung existierender Dateien
+                    var updateExistingCheckBox = new CheckBox
+                    {
+                        Text = "Existierende Dateien aktualisieren (falls vorhanden)",
+                        Checked = true
+                    };
+
+                    // Buttons
+                    var importButton = new Button { Text = "Importieren" };
+                    var cancelButton = new Button { Text = "Abbrechen" };
+                    
+                    cancelButton.Click += (sender, e) => confirmDialog.Close();
+                    
+                    importButton.Click += async (sender, e) => {
+                        confirmDialog.Close();
+                        await ImportFilesAsync(filePaths, updateExistingCheckBox.Checked.Value);
+                    };
+
+                    // Layout des Dialogs
+                    confirmDialog.Content = new TableLayout
+                    {
+                        Spacing = new Size(5, 10),
+                        Padding = new Padding(10),
+                        Rows = {
+                            new TableRow(descriptionLabel),
+                            new TableRow(new Label { Text = "Gefundene Dateien:" }),
+                            new TableRow(filesListBox) { ScaleHeight = true },
+                            new TableRow(updateExistingCheckBox),
+                            new TableRow(
+                                new StackLayout
+                                {
+                                    Orientation = Orientation.Horizontal,
+                                    Spacing = 5,
+                                    Items = {
+                                        null, // Spacer
+                                        cancelButton,
+                                        importButton
+                                    }
+                                }
+                            )
+                        }
+                    };
+
+                    confirmDialog.ShowModal(this);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"Fehler beim Importieren des Ordners: {ex.Message}",
+                    "Fehler",
+                    MessageBoxButtons.OK,
+                    MessageBoxType.Error
+                );
+            }
+        }
+
+        // Methode zum Importieren mehrerer ausgewählter Dateien
+        private void ImportMultipleFiles()
+        {
+            try
+            {
+                var doc = RhinoDoc.ActiveDoc;
+                if (doc == null)
+                {
+                    MessageBox.Show(
+                        "Es ist kein aktives Rhino-Dokument geöffnet.",
+                        "Fehler",
+                        MessageBoxButtons.OK,
+                        MessageBoxType.Error
+                    );
+                    return;
+                }
+
+                // Erstelle einen Dialog für die Dateiauswahl
+                var openFileDialog = new OpenFileDialog
+                {
+                    Title = "PDF-Dateien auswählen",
+                    Filters = { new FileFilter("PDF-Dateien", "*.pdf") },
+                    MultiSelect = true
+                };
+
+                if (openFileDialog.ShowDialog(this) == DialogResult.Ok)
+                {
+                    string[] filePaths = openFileDialog.Filenames.ToArray();
+                    
+                    if (filePaths.Length == 0)
+                    {
+                        return;
+                    }
+                    
+                    // Erstelle einen Dialog zur Bestätigung
+                    var confirmDialog = new Dialog
+                    {
+                        Title = "Dateien importieren",
+                        Width = 500,
+                        Height = 400,
+                        Padding = new Padding(10)
+                    };
+
+                    // Eine ListBox zum Anzeigen der ausgewählten Dateien
+                    var filesListBox = new ListBox();
+                    foreach (var file in filePaths)
+                    {
+                        filesListBox.Items.Add(Path.GetFileName(file));
+                    }
+
+                    // Beschreibungstext
+                    var descriptionLabel = new Label
+                    {
+                        Text = $"Sie haben {filePaths.Length} Dateien ausgewählt. " +
+                               "Möchten Sie diese Dateien in die Datenbank importieren?"
+                    };
+
+                    // Checkbox für Aktualisierung existierender Dateien
+                    var updateExistingCheckBox = new CheckBox
+                    {
+                        Text = "Existierende Dateien aktualisieren (falls vorhanden)",
+                        Checked = true
+                    };
+
+                    // Buttons
+                    var importButton = new Button { Text = "Importieren" };
+                    var cancelButton = new Button { Text = "Abbrechen" };
+                    
+                    cancelButton.Click += (sender, e) => confirmDialog.Close();
+                    
+                    importButton.Click += async (sender, e) => {
+                        confirmDialog.Close();
+                        await ImportFilesAsync(filePaths, updateExistingCheckBox.Checked.Value);
+                    };
+
+                    // Layout des Dialogs
+                    confirmDialog.Content = new TableLayout
+                    {
+                        Spacing = new Size(5, 10),
+                        Padding = new Padding(10),
+                        Rows = {
+                            new TableRow(descriptionLabel),
+                            new TableRow(new Label { Text = "Ausgewählte Dateien:" }),
+                            new TableRow(filesListBox) { ScaleHeight = true },
+                            new TableRow(updateExistingCheckBox),
+                            new TableRow(
+                                new StackLayout
+                                {
+                                    Orientation = Orientation.Horizontal,
+                                    Spacing = 5,
+                                    Items = {
+                                        null, // Spacer
+                                        cancelButton,
+                                        importButton
+                                    }
+                                }
+                            )
+                        }
+                    };
+
+                    confirmDialog.ShowModal(this);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"Fehler beim Importieren der Dateien: {ex.Message}",
+                    "Fehler",
+                    MessageBoxButtons.OK,
+                    MessageBoxType.Error
+                );
+            }
+        }
+
+        // Gemeinsame Methode zum Importieren mehrerer Dateien
+        // Behält die ursprünglichen Dateinamen beim Import bei
+        private async Task ImportFilesAsync(string[] filePaths, bool updateExisting)
+        {
+            try
+            {
+                _statusLabel.Text = "Importiere Dateien...";
+                _progressBar.Value = 0;
+                _progressBar.MaxValue = filePaths.Length;
+                
+                // Bucket für Zeichnungen sicherstellen (erstellen, falls noch nicht vorhanden)
+                string bucketName = "uploadrhino";
+                await SupabaseService.Instance.CreateBucketIfNotExistsAsync(bucketName);
+                
+                // Alle vorhandenen Zeichnungen abrufen, um doppelte zu prüfen
+                var existingDrawings = await _partsController.GetAllDrawingsAsync();
+                var existingFileNames = existingDrawings.Select(d => Path.GetFileName(d.FilePath ?? "")).Where(f => !string.IsNullOrEmpty(f)).ToList();
+
+                int successCount = 0;
+                int skipCount = 0;
+                int errorCount = 0;
+                List<string> errorMessages = new List<string>();
+                
+                // Durchlaufe alle Dateien und versuche sie zu importieren
+                for (int i = 0; i < filePaths.Length; i++)
+                {
+                    string filePath = filePaths[i];
+                    string fileName = Path.GetFileName(filePath);
+                    
+                    // UI aktualisieren
+                    await Application.Instance.InvokeAsync(() => {
+                        _statusLabel.Text = $"Importiere {i+1} von {filePaths.Length}: {fileName}...";
+                        _progressBar.Value = i;
+                    });
+
+                    try
+                    {
+                        // Prüfe, ob die Datei bereits existiert
+                        bool fileExists = existingFileNames.Contains(fileName);
+                        
+                        if (fileExists && !updateExisting)
+                        {
+                            // Überspringe existierende Dateien, wenn updateExisting nicht aktiviert ist
+                            skipCount++;
+                            continue;
+                        }
+                        
+                        // Erstelle ein neues Drawing-Objekt
+                        var drawing = new Drawing
+                        {
+                            Title = Path.GetFileNameWithoutExtension(filePath),
+                            // Generiere eine eindeutige DrawingNumber für DB-Referenz, aber behalte den Originaldateinamen für Upload
+                            DrawingNumber = $"AUTO-{DateTime.Now.ToString("yyyyMMdd")}-{i+1}",
+                            Revision = "A",
+                            CreatedAt = DateTime.UtcNow,
+                            UpdatedAt = DateTime.UtcNow,
+                            FileType = "3dm",
+                            FilePath = "" // Wird durch den Upload gesetzt
+                        };
+                        
+                        // Wenn wir eine vorhandene Datei aktualisieren, behalte die Drawing-ID bei
+                        if (fileExists && updateExisting)
+                        {
+                            var existingDrawing = existingDrawings.FirstOrDefault(d => Path.GetFileName(d.FilePath ?? "") == fileName);
+                            if (existingDrawing != null)
+                            {
+                                drawing.Id = existingDrawing.Id;
+                                drawing.PartId = existingDrawing.PartId;
+                                drawing.DrawingNumber = existingDrawing.DrawingNumber;
+                                drawing.Revision = existingDrawing.Revision;
+                                drawing.Title = existingDrawing.Title;
+                                
+                                // Lösche die vorhandene Datei aus dem Storage
+                                string existingFileName = Path.GetFileName(existingDrawing.FilePath ?? "");
+                                if (!string.IsNullOrEmpty(existingFileName))
+                                {
+                                    await SupabaseService.Instance.DeleteFileAsync(bucketName, existingFileName);
+                                }
+                            }
+                        }
+                        
+                        // Verwende den ursprünglichen Dateinamen für den Upload
+                        // Datei in den Storage hochladen
+                        var fileUrl = await SupabaseService.Instance.UploadFileAsync(bucketName, filePath, fileName);
+                        drawing.FilePath = fileUrl;
+                        
+                        // Drawing-Eintrag in der Datenbank erstellen oder aktualisieren
+                        if (fileExists && updateExisting)
+                        {
+                            await SupabaseService.Instance.UpdateDrawingAsync(drawing);
+                        }
+                        else
+                        {
+                            await SupabaseService.Instance.CreateDrawingAsync(drawing);
+                        }
+                        
+                        successCount++;
+                    }
+                    catch (Exception ex)
+                    {
+                        errorCount++;
+                        errorMessages.Add($"Fehler bei {fileName}: {ex.Message}");
+                    }
+                }
+                
+                // UI aktualisieren
+                await Application.Instance.InvokeAsync(() => {
+                    _progressBar.Value = filePaths.Length;
+                    _statusLabel.Text = $"Import abgeschlossen: {successCount} erfolgreich, {skipCount} übersprungen, {errorCount} fehlgeschlagen";
+                    
+                    // Zeige eine Zusammenfassung an
+                    var resultMessage = $"Import abgeschlossen:\n\n" +
+                                     $"- {successCount} Dateien erfolgreich importiert\n" +
+                                     $"- {skipCount} Dateien übersprungen (bereits vorhanden)\n" +
+                                     $"- {errorCount} Dateien fehlgeschlagen\n\n";
+                    
+                    if (errorCount > 0)
+                    {
+                        resultMessage += "Fehler:\n" + string.Join("\n", errorMessages);
+                    }
+                    
+                    MessageBox.Show(
+                        resultMessage,
+                        "Import-Ergebnis",
+                        MessageBoxButtons.OK,
+                        errorCount > 0 ? MessageBoxType.Warning : MessageBoxType.Information
+                    );
+                    
+                    // Aktualisiere die Liste der Zeichnungen
+                    RefreshData();
+                });
+            }
+            catch (Exception ex)
+            {
+                await Application.Instance.InvokeAsync(() => {
+                    _statusLabel.Text = $"Fehler beim Importieren: {ex.Message}";
+                    
+                    MessageBox.Show(
+                        $"Fehler beim Importieren der Dateien: {ex.Message}",
+                        "Fehler",
+                        MessageBoxButtons.OK,
+                        MessageBoxType.Error
+                    );
+                });
+            }
         }
     }
 } 

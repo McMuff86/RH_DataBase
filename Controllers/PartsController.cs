@@ -842,6 +842,42 @@ namespace RH_DataBase.Controllers
         }
 
         /// <summary>
+        /// Ermittelt die nächste verfügbare Zeichnungsnummer
+        /// </summary>
+        /// <returns>Die nächste freie Zeichnungsnummer</returns>
+        private async Task<string> GetNextDrawingNumberAsync()
+        {
+            try
+            {
+                // Alle vorhandenen Zeichnungen holen
+                var drawings = await _supabaseService.GetAllDrawingsAsync();
+                
+                // Numerische Zeichnungsnummern filtern
+                var numericNumbers = drawings
+                    .Select(d => d.DrawingNumber)
+                    .Where(n => int.TryParse(n, out _))
+                    .Select(n => int.Parse(n))
+                    .ToList();
+                
+                // Wenn keine numerischen Zeichnungsnummern vorhanden sind, starte bei 1
+                if (numericNumbers.Count == 0)
+                {
+                    return "1";
+                }
+                
+                // Sonst nimm die höchste Nummer und erhöhe sie um 1
+                int nextNumber = numericNumbers.Max() + 1;
+                return nextNumber.ToString();
+            }
+            catch (Exception ex)
+            {
+                RhinoApp.WriteLine($"Fehler beim Ermitteln der nächsten Zeichnungsnummer: {ex.Message}");
+                // Im Fehlerfall gebe eine zufällige Nummer zurück
+                return $"AUTO-{DateTime.Now.Ticks % 10000}";
+            }
+        }
+
+        /// <summary>
         /// Erstellt oder aktualisiert eine Zeichnung und verknüpft sie mit einer 3DM-Datei
         /// </summary>
         /// <param name="filePath">Der Pfad zur 3DM-Datei</param>
@@ -860,6 +896,13 @@ namespace RH_DataBase.Controllers
                 if (!File.Exists(filePath))
                 {
                     throw new Exception($"Die Datei {filePath} existiert nicht.");
+                }
+
+                // Wenn keine Zeichnungsnummer angegeben ist, generiere eine automatisch
+                if (string.IsNullOrWhiteSpace(drawingNumber))
+                {
+                    drawingNumber = await GetNextDrawingNumberAsync();
+                    RhinoApp.WriteLine($"Automatisch generierte Zeichnungsnummer: {drawingNumber}");
                 }
                 
                 // Erstelle ein neues Zeichnungsobjekt
@@ -908,6 +951,48 @@ namespace RH_DataBase.Controllers
                     RhinoApp.WriteLine($"Details: {ex.InnerException.Message}");
                 }
                 throw;
+            }
+        }
+
+        /// <summary>
+        /// Lädt eine Zeichnungs-/PDF-Datei herunter und gibt den lokalen Dateipfad zurück
+        /// </summary>
+        /// <param name="drawing">Die herunterzuladende Zeichnung</param>
+        /// <returns>Den lokalen Pfad der heruntergeladenen Datei</returns>
+        public async Task<string> DownloadDrawingFileAsync(Drawing drawing)
+        {
+            try
+            {
+                RhinoApp.WriteLine($"Lade Zeichnungsdatei für {drawing.Title} (ID: {drawing.Id}) herunter");
+                
+                // Prüfe, ob ein Dateipfad vorhanden ist
+                if (string.IsNullOrEmpty(drawing.FilePath))
+                {
+                    RhinoApp.WriteLine("Kein Dateipfad für diese Zeichnung vorhanden.");
+                    return null;
+                }
+                
+                // Hole den Dateinamen aus dem Pfad
+                string fileName = Path.GetFileName(drawing.FilePath);
+                string tempFilePath = Path.Combine(TempDirectory, fileName);
+                
+                // Stelle sicher, dass das Temp-Verzeichnis existiert
+                Directory.CreateDirectory(TempDirectory);
+                
+                // Datei herunterladen
+                RhinoApp.WriteLine($"Lade Zeichnungsdatei {fileName} herunter...");
+                await _supabaseService.DownloadFileAsync(BLOCKS_BUCKET, fileName, tempFilePath);
+                
+                return tempFilePath;
+            }
+            catch (Exception ex)
+            {
+                RhinoApp.WriteLine($"Fehler beim Herunterladen der Zeichnungsdatei: {ex.Message}");
+                if (ex.InnerException != null)
+                {
+                    RhinoApp.WriteLine($"Details: {ex.InnerException.Message}");
+                }
+                return null;
             }
         }
     }

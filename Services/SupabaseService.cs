@@ -7,6 +7,7 @@ using Postgrest;
 using RH_DataBase.Models;
 using RH_DataBase.Config;
 using System.Linq;
+using System.IO;
 
 namespace RH_DataBase.Services
 {
@@ -494,9 +495,8 @@ namespace RH_DataBase.Services
         {
             try
             {
-                // Erstelle einen eindeutigen Dateinamen basierend auf der Zeichnungsnummer
-                string safeDrawingNumber = drawing.DrawingNumber.Replace("/", "_").Replace(" ", "_");
-                string fileName = $"{safeDrawingNumber}_{DateTime.Now:yyyyMMdd_HHmmss}{System.IO.Path.GetExtension(filePath)}";
+                // Verwende den ursprünglichen Dateinamen statt einen generierten Namen
+                string fileName = Path.GetFileName(filePath);
                 
                 // Lade die Datei hoch
                 string fileUrl = await UploadDrawingFileAsync("uploadrhino", filePath, fileName);
