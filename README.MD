@@ -23,12 +23,46 @@ This plugin for Rhino enables the management of parts and drawings through a Sup
    - Create C# classes for parts and drawings using `[Table]` and `[Column]` attributes.
 3. **Initialize Supabase Client**:
    - Configure the client in your code using the Project URL and Public Key.
+4. **Set up Storage Bucket**:
+   - Create a storage bucket in Supabase called "uploadrhino" for storing 3DM files.
+   - Ensure proper permissions are set for the bucket.
+
+## File Storage and Database Integration
+The plugin uses Supabase Storage to store and retrieve Rhino 3DM files that are linked to parts and drawings in the database:
+
+1. **Bucket Structure**:
+   - All files are stored in a bucket named "uploadrhino"
+   - Files are organized with unique names that include timestamps
+
+2. **Parts and 3DM Files**:
+   - Each part can have an associated 3DM file (block definition)
+   - The file path is stored in the `model_path` column of the parts table
+   - When exporting a block from Rhino, it's converted to a 3DM file and stored in the bucket
+
+3. **Drawings and 3DM Files**:
+   - Drawings can have associated 3DM files
+   - The file path is stored in the `file_path` column of the drawings table
+   - When importing a drawing, the 3DM file is uploaded to the bucket and linked to the drawing record
+
+4. **File Retrieval**:
+   - When inserting a part or opening a drawing, the plugin:
+     - Downloads the 3DM file from the Supabase bucket to a temporary directory
+     - Imports the file into Rhino as a block definition
+     - Inserts the block into the current document
+     - Adds metadata as userstrings to the Rhino object
 
 ## Usage
 1. Launch Rhino and load the plugin.
 2. Access the user interface through the plugin menu.
 3. Connect to the Supabase database.
-4. Select parts from the list and insert them into your Rhino project.
+4. **Working with Parts**:
+   - Select parts from the list and insert them into your Rhino project.
+   - Create blocks from selected objects and export them as parts.
+   - Export existing block definitions as parts.
+5. **Working with Drawings**:
+   - Import 3DM files as drawings and link them to parts.
+   - View and manage drawings associated with parts.
+   - Open drawings directly in Rhino from the database.
 
 ## Development Notes
 - **RhinoCommon**: Refer to the [RhinoCommon Documentation](https://developer.rhino3d.com/guides/rhinocommon/) for plugin development details.
@@ -48,6 +82,7 @@ This plugin for Rhino enables the management of parts and drawings through a Sup
   - [Database Tables](https://supabase.com/docs/guides/database/tables)
   - [Working with Arrays](https://supabase.com/docs/guides/database/arrays)
   - [Postgres Indexes](https://supabase.com/docs/guides/database/postgres/indexes)
+  - [Storage Management](https://supabase.com/docs/guides/storage)
 
 ## Database Setup and Testing
 The plugin has built-in functionality for testing the database connection and setting up necessary tables:

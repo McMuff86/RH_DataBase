@@ -32,24 +32,36 @@ namespace RH_DataBase
             
             try
             {
-                // Wenn das Fenster bereits existiert, bringen wir es in den Vordergrund
-                if (_mainView != null && !_mainView.IsDisposed)
+                // In Eto.Forms kann ein geschlossenes Fenster nicht wiederverwendet werden
+                // Wir erstellen bei jedem Aufruf eine neue Instanz
+                if (_mainView != null && !_mainView.IsDisposed && _mainView.Visible)
                 {
+                    // Wenn das Fenster noch aktiv und sichtbar ist, bringen wir es in den Vordergrund
                     _mainView.BringToFront();
                     RhinoApp.WriteLine("Parts Manager wurde in den Vordergrund geholt.");
                     return Result.Success;
                 }
                 
-                // Erstellen und anzeigen der Hauptansicht als nicht-modales Fenster
+                // Erstelle in allen anderen Fällen ein neues Fenster
                 _mainView = new MainView();
+                
+                // Füge einen Event-Handler hinzu, der die Referenz löscht, wenn das Fenster geschlossen wird
+                _mainView.Closed += (sender, e) => 
+                {
+                    RhinoApp.WriteLine("Parts Manager wurde geschlossen. Setze Referenz zurück.");
+                    _mainView = null;
+                };
+                
                 _mainView.Show();
                 
-                RhinoApp.WriteLine("Parts Manager wurde geöffnet.");
+                RhinoApp.WriteLine("Parts Manager wurde neu geöffnet.");
                 return Result.Success;
             }
             catch (Exception ex)
             {
                 RhinoApp.WriteLine($"Fehler beim Starten des Parts Managers: {ex.Message}");
+                // Bei einem Fehler die Referenz auf null setzen, um einen sauberen Neustart zu ermöglichen
+                _mainView = null;
                 return Result.Failure;
             }
         }

@@ -304,6 +304,27 @@ namespace RH_DataBase.Services
         #region File Storage Operations
 
         /// <summary>
+        /// Listet alle Dateien in einem Supabase-Bucket auf
+        /// </summary>
+        /// <param name="bucketName">Der Name des Buckets</param>
+        /// <returns>Eine Liste von Dateiinformationen</returns>
+        public async Task<List<Supabase.Storage.FileObject>> ListFilesInBucketAsync(string bucketName)
+        {
+            try
+            {
+                var files = await _client.Storage
+                    .From(bucketName)
+                    .List();
+                
+                return files;
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Fehler beim Auflisten der Dateien im Bucket: {ex.Message}", ex);
+            }
+        }
+
+        /// <summary>
         /// Erstellt einen Storage-Bucket, falls er noch nicht existiert
         /// </summary>
         public async Task<bool> CreateBucketIfNotExistsAsync(string bucketName, bool isPublic = true)
@@ -328,6 +349,28 @@ namespace RH_DataBase.Services
             catch (Exception ex)
             {
                 throw new Exception($"Failed to create bucket: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Erzeugt eine öffentliche URL für eine Datei im Bucket
+        /// </summary>
+        /// <param name="bucketName">Der Name des Buckets</param>
+        /// <param name="fileName">Der Name der Datei</param>
+        /// <returns>Die öffentliche URL der Datei</returns>
+        public string GetPublicUrlForFile(string bucketName, string fileName)
+        {
+            try
+            {
+                var fileUrl = _client.Storage
+                    .From(bucketName)
+                    .GetPublicUrl(fileName);
+                
+                return fileUrl;
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Fehler beim Generieren der öffentlichen URL: {ex.Message}", ex);
             }
         }
 
@@ -388,6 +431,97 @@ namespace RH_DataBase.Services
             catch (Exception ex)
             {
                 throw new Exception($"Failed to delete file: {ex.Message}");
+            }
+        }
+
+        public async Task<string> UploadDrawingFileAsync(string bucketName, string filePath, string fileName)
+        {
+            try
+            {
+                // Prüfe, ob die Datei existiert
+                if (!System.IO.File.Exists(filePath))
+                {
+                    throw new Exception($"Die Datei {filePath} existiert nicht.");
+                }
+                
+                // Prüfe die Dateierweiterung
+                string extension = System.IO.Path.GetExtension(filePath).ToLower();
+                bool is3dmFile = extension == ".3dm";
+                
+                // Protokolliere Informationen
+                try
+                {
+                    Rhino.RhinoApp.WriteLine($"Lade Zeichnungsdatei hoch: {fileName} (Typ: {(is3dmFile ? "Rhino 3DM" : extension)})");
+                    Rhino.RhinoApp.WriteLine($"Quelldatei: {filePath}");
+                }
+                catch
+                {
+                    Console.WriteLine($"Lade Zeichnungsdatei hoch: {fileName}");
+                }
+                
+                // Lese die Datei und lade sie hoch
+                var fileBytes = System.IO.File.ReadAllBytes(filePath);
+                var response = await _client.Storage
+                    .From(bucketName)
+                    .Upload(fileBytes, fileName);
+                
+                // Generiere eine öffentliche URL für die Datei
+                var fileUrl = _client.Storage
+                    .From(bucketName)
+                    .GetPublicUrl(fileName);
+                
+                try
+                {
+                    Rhino.RhinoApp.WriteLine($"Datei erfolgreich hochgeladen: {fileUrl}");
+                }
+                catch
+                {
+                    Console.WriteLine($"Datei erfolgreich hochgeladen: {fileUrl}");
+                }
+                
+                return fileUrl;
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Fehler beim Hochladen der Zeichnungsdatei: {ex.Message}", ex);
+            }
+        }
+
+        /// <summary>
+        /// Lädt eine Zeichnung als 3DM-Datei hoch und aktualisiert den entsprechenden Zeichnungsdatensatz
+        /// </summary>
+        public async Task<Drawing> UploadAndLinkDrawingAsync(string filePath, Drawing drawing)
+        {
+            try
+            {
+                // Erstelle einen eindeutigen Dateinamen basierend auf der Zeichnungsnummer
+                string safeDrawingNumber = drawing.DrawingNumber.Replace("/", "_").Replace(" ", "_");
+                string fileName = $"{safeDrawingNumber}_{DateTime.Now:yyyyMMdd_HHmmss}{System.IO.Path.GetExtension(filePath)}";
+                
+                // Lade die Datei hoch
+                string fileUrl = await UploadDrawingFileAsync("uploadrhino", filePath, fileName);
+                
+                // Aktualisiere die Zeichnungsinformationen
+                drawing.FilePath = fileUrl;
+                drawing.FileType = System.IO.Path.GetExtension(filePath).TrimStart('.');
+                drawing.UpdatedAt = DateTime.UtcNow;
+                
+                // Speichere die Zeichnung in der Datenbank
+                if (drawing.Id > 0)
+                {
+                    // Bestehende Zeichnung aktualisieren
+                    return await UpdateDrawingAsync(drawing);
+                }
+                else
+                {
+                    // Neue Zeichnung erstellen
+                    drawing.CreatedAt = DateTime.UtcNow;
+                    return await CreateDrawingAsync(drawing);
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Fehler beim Hochladen und Verknüpfen der Zeichnung: {ex.Message}", ex);
             }
         }
 
