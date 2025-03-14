@@ -11,7 +11,7 @@ using RH_DataBase.Controllers;
 
 namespace RH_DataBase.Views
 {
-    public class MainView : Dialog<DialogResult>
+    public class MainView : Form
     {
         private PartsController _partsController;
         private TestDataController _testDataController;
@@ -32,6 +32,12 @@ namespace RH_DataBase.Views
         {
             Title = "Rhino-Supabase Parts Manager";
             MinimumSize = new Size(800, 600);
+            Resizable = true;
+            Maximizable = true;
+            
+            // Füge Close-Button hinzu
+            var closeButton = new Button { Text = "Schließen" };
+            closeButton.Click += (sender, e) => Close();
             
             _partsController = PartsController.Instance;
             _testDataController = TestDataController.Instance;
@@ -100,7 +106,8 @@ namespace RH_DataBase.Views
                             {
                                 new StackLayoutItem(_statusLabel, true),
                                 new StackLayoutItem(_progressBar, true),
-                                _insertButton
+                                _insertButton,
+                                closeButton
                             }
                         }
                     )
@@ -109,6 +116,12 @@ namespace RH_DataBase.Views
             
             // Daten laden
             LoadDataAsync();
+            
+            // Handler für das Schließen des Fensters
+            Closed += (sender, e) => 
+            {
+                RhinoApp.WriteLine("Parts Manager wurde geschlossen.");
+            };
         }
         
         private void InitializeComponents()

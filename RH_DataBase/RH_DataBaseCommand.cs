@@ -11,6 +11,8 @@ namespace RH_DataBase
 {
     public class RH_DataBaseCommand : Command
     {
+        private static MainView _mainView;
+
         public RH_DataBaseCommand()
         {
             // Rhino only creates one instance of each command class defined in a
@@ -30,21 +32,20 @@ namespace RH_DataBase
             
             try
             {
-                // Erstellen und anzeigen der Hauptansicht
-                var mainView = new MainView();
-                var result = mainView.ShowModal();
-                
-                // Je nach Ergebnis können wir hier entsprechenden Code ausführen
-                if (result == Eto.Forms.DialogResult.Ok)
+                // Wenn das Fenster bereits existiert, bringen wir es in den Vordergrund
+                if (_mainView != null && !_mainView.IsDisposed)
                 {
-                    RhinoApp.WriteLine("Parts Manager wurde mit OK geschlossen.");
+                    _mainView.BringToFront();
+                    RhinoApp.WriteLine("Parts Manager wurde in den Vordergrund geholt.");
                     return Result.Success;
                 }
-                else
-                {
-                    RhinoApp.WriteLine("Parts Manager wurde abgebrochen oder geschlossen.");
-                    return Result.Cancel;
-                }
+                
+                // Erstellen und anzeigen der Hauptansicht als nicht-modales Fenster
+                _mainView = new MainView();
+                _mainView.Show();
+                
+                RhinoApp.WriteLine("Parts Manager wurde geöffnet.");
+                return Result.Success;
             }
             catch (Exception ex)
             {
