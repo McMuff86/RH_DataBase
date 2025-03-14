@@ -76,29 +76,77 @@ namespace RH_DataBase.Services
                     return false;
                 }
                 
-                // Erstelle ein neues temporäres 3dm-Dokument
+                RhinoApp.WriteLine($"Exportiere Block '{instanceDef.Name}', mit {instanceDef.ObjectCount} Objekten nach {exportPath}");
+                
+                // Methode 1: Direkt die 3DM-Datei erstellen
                 var file3dm = new File3dm();
                 
+                // Setze Dokument-Eigenschaften
+                file3dm.Notes.Notes = $"Block: {instanceDef.Name}\nBeschreibung: {instanceDef.Description}\nObjektanzahl: {instanceDef.ObjectCount}";
+                
+                // Erstelle eine Kopie der Einheiten und Toleranzen vom Hauptdokument
+                file3dm.Settings.ModelUnitSystem = doc.ModelUnitSystem;
+                file3dm.Settings.PageUnitSystem = doc.PageUnitSystem;
+                file3dm.Settings.ModelAbsoluteTolerance = doc.ModelAbsoluteTolerance;
+                file3dm.Settings.ModelAngleToleranceRadians = doc.ModelAngleToleranceRadians;
+                
                 // Alle Objekte aus der Blockdefinition hinzufügen
+                int objectCount = 0;
                 foreach (var objRef in instanceDef.GetObjects())
                 {
-                    var geometry = objRef.Geometry;
-                    if (geometry != null)
+                    if (objRef != null)
                     {
-                        var attributes = objRef.Attributes;
-                        file3dm.Objects.Add(geometry, attributes);
+                        var geometry = objRef.Geometry;
+                        if (geometry != null)
+                        {
+                            // Erstelle eine tatsächliche Kopie des Objekts
+                            var dupGeometry = geometry.Duplicate();
+                            if (dupGeometry != null)
+                            {
+                                // Erstelle neue Attribute basierend auf dem Original aber mit eindeutiger Kopie
+                                var attributes = objRef.Attributes.Duplicate();
+                                file3dm.Objects.Add(dupGeometry, attributes);
+                                objectCount++;
+                            }
+                            else
+                            {
+                                RhinoApp.WriteLine($"Warnung: Geometrie von {objRef.Id} konnte nicht dupliziert werden");
+                            }
+                        }
+                        else
+                        {
+                            RhinoApp.WriteLine($"Warnung: Geometrie von {objRef.Id} ist null");
+                        }
                     }
                 }
                 
-                // Füge Blockinformationen als Notiz hinzu
-                file3dm.Notes.Notes = $"Blockdefinition: {instanceDef.Name}\nBeschreibung: {instanceDef.Description}";
+                RhinoApp.WriteLine($"Füge {objectCount} Objekte in die exportierte Datei ein");
                 
                 // Speichere das Dokument
-                return file3dm.Write(exportPath, 7); // Version 7 für Rhino 7
+                bool saveResult = file3dm.Write(exportPath, 7); // Version 7 für Rhino 7
+                
+                if (saveResult)
+                {
+                    RhinoApp.WriteLine($"Blockdefinition wurde erfolgreich nach {exportPath} exportiert");
+                    
+                    // Überprüfe die Dateigröße
+                    var fileInfo = new FileInfo(exportPath);
+                    RhinoApp.WriteLine($"Exportierte Datei: {fileInfo.Length} Bytes");
+                }
+                else
+                {
+                    RhinoApp.WriteLine($"Fehler beim Speichern der Datei nach {exportPath}");
+                }
+                
+                return saveResult;
             }
             catch (Exception ex)
             {
                 RhinoApp.WriteLine($"Fehler beim Exportieren der Blockdefinition: {ex.Message}");
+                if (ex.InnerException != null)
+                {
+                    RhinoApp.WriteLine($"Details: {ex.InnerException.Message}");
+                }
                 return false;
             }
         }
@@ -238,8 +286,53 @@ namespace RH_DataBase.Services
         {
             try
             {
+                // Prüfe, ob der Blockname gültig ist
+                if (string.IsNullOrWhiteSpace(blockName))
+                {
+                    blockName = $"Block_{DateTime.Now:yyyyMMdd_HHmmss}";
+                    RhinoApp.WriteLine($"Blockname war leer, verwende automatisch generierten Namen: {blockName}");
+                }
+                
+                // Prüfe, ob der Name bereits vergeben ist
+                bool nameExists = false;
+                for (int i = 0; i < doc.InstanceDefinitions.Count; i++)
+                {
+                    if (doc.InstanceDefinitions[i].Name.Equals(blockName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        nameExists = true;
+                        break;
+                    }
+                }
+                
+                // Falls der Name schon existiert, füge eine Nummer hinzu
+                if (nameExists)
+                {
+                    string originalName = blockName;
+                    int counter = 1;
+                    
+                    // Versuche, einen eindeutigen Namen zu finden
+                    do
+                    {
+                        blockName = $"{originalName}_{counter++}";
+                        nameExists = false;
+                        
+                        for (int i = 0; i < doc.InstanceDefinitions.Count; i++)
+                        {
+                            if (doc.InstanceDefinitions[i].Name.Equals(blockName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                nameExists = true;
+                                break;
+                            }
+                        }
+                    } 
+                    while (nameExists && counter < 1000); // Sicherheitsabbruch
+                    
+                    RhinoApp.WriteLine($"Blockname '{originalName}' bereits vergeben, verwende stattdessen: {blockName}");
+                }
+                
                 // Sammle die Objekte für den Block
                 var guids = objectIds.ToArray();
+                RhinoApp.WriteLine($"Erstelle Block '{blockName}' aus {guids.Length} Objekten");
                 
                 // Sammle die Geometrie- und Attribut-Objekte
                 List<GeometryBase> geometryList = new List<GeometryBase>();
@@ -250,40 +343,78 @@ namespace RH_DataBase.Services
                     var rhinoObject = doc.Objects.Find(id);
                     if (rhinoObject != null)
                     {
-                        geometryList.Add(rhinoObject.Geometry);
-                        attributesList.Add(rhinoObject.Attributes);
+                        var geometry = rhinoObject.Geometry;
+                        if (geometry != null)
+                        {
+                            // Dupliziere die Geometrie für den Block
+                            var geomCopy = geometry.Duplicate();
+                            if (geomCopy != null)
+                            {
+                                geometryList.Add(geomCopy);
+                                attributesList.Add(rhinoObject.Attributes);
+                            }
+                            else
+                            {
+                                RhinoApp.WriteLine($"Warnung: Geometrie für Objekt {id} konnte nicht dupliziert werden.");
+                            }
+                        }
+                        else
+                        {
+                            RhinoApp.WriteLine($"Warnung: Geometrie für Objekt {id} ist null.");
+                        }
+                    }
+                    else
+                    {
+                        RhinoApp.WriteLine($"Warnung: Objekt mit ID {id} konnte nicht gefunden werden.");
                     }
                 }
                 
-                // Erstelle einen neuen Block
-                int definitionIndex = doc.InstanceDefinitions.Add(
+                if (geometryList.Count == 0)
+                {
+                    RhinoApp.WriteLine("Fehler: Keine gültigen Objekte gefunden, um einen Block zu erstellen.");
+                    return -1;
+                }
+                
+                RhinoApp.WriteLine($"Erstelle Block mit {geometryList.Count} Objekten");
+                
+                // Erstelle den Block
+                int blockDefinitionId = doc.InstanceDefinitions.Add(
                     blockName,
-                    "", // Beschreibung
+                    "Automatisch erstellter Block", // Beschreibung
                     basePoint,
                     geometryList,
                     attributesList
                 );
                 
-                if (definitionIndex < 0)
+                if (blockDefinitionId < 0)
                 {
-                    RhinoApp.WriteLine("Fehler beim Erstellen des Blocks.");
+                    RhinoApp.WriteLine("Fehler: Block konnte nicht erstellt werden.");
                     return -1;
                 }
                 
-                // Lösche die Original-Objekte, falls gewünscht
+                RhinoApp.WriteLine($"Block '{blockName}' erfolgreich erstellt mit ID {blockDefinitionId}");
+                
+                // Objekte löschen, falls gewünscht
                 if (deleteObjects)
                 {
-                    foreach (var id in guids)
+                    foreach (Guid id in guids)
                     {
                         doc.Objects.Delete(id, true);
                     }
                 }
                 
-                return definitionIndex;
+                // Ansicht aktualisieren
+                doc.Views.Redraw();
+                
+                return blockDefinitionId;
             }
             catch (Exception ex)
             {
                 RhinoApp.WriteLine($"Fehler beim Erstellen des Blocks: {ex.Message}");
+                if (ex.InnerException != null)
+                {
+                    RhinoApp.WriteLine($"Details: {ex.InnerException.Message}");
+                }
                 return -1;
             }
         }

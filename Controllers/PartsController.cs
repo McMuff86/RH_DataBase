@@ -257,8 +257,27 @@ namespace RH_DataBase.Controllers
                     throw new Exception($"Blockdefinition mit ID {blockDefinitionId} konnte nicht gefunden werden.");
                 }
                 
-                // Erstelle temporären Dateinamen
-                string tempFileName = $"{Guid.NewGuid()}.3dm";
+                // Verwende den Blocknamen als Basis für den Dateinamen
+                // Entferne ungültige Dateizeichen und ersetze sie durch Unterstriche
+                string safeBlockName = string.Join("_", instanceDef.Name.Split(Path.GetInvalidFileNameChars()));
+                
+                // Stelle sicher, dass der Name nicht leer ist und einzigartig ist durch Hinzufügen eines Zeitstempels
+                if (string.IsNullOrWhiteSpace(safeBlockName))
+                {
+                    safeBlockName = "Block";
+                }
+                
+                // Füge einen Zeitstempel hinzu, um die Eindeutigkeit zu gewährleisten
+                string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                string tempFileName = $"{safeBlockName}_{timestamp}.3dm";
+                
+                // Für den Fall, dass der Name zu lang wird, kürze ihn
+                if (tempFileName.Length > 100)
+                {
+                    tempFileName = $"{safeBlockName.Substring(0, 90)}_{timestamp}.3dm";
+                }
+                
+                RhinoApp.WriteLine($"Exportiere Block '{instanceDef.Name}' als '{tempFileName}'");
                 string tempFilePath = Path.Combine(TempDirectory, tempFileName);
                 
                 // Exportiere den Block als 3DM-Datei
@@ -267,6 +286,10 @@ namespace RH_DataBase.Controllers
                 {
                     throw new Exception("Fehler beim Exportieren der Blockdefinition.");
                 }
+                
+                // Füge Debug-Informationen hinzu
+                var fileInfo = new FileInfo(tempFilePath);
+                RhinoApp.WriteLine($"Exportierte Datei Größe: {fileInfo.Length} Bytes");
                 
                 // Lade die Datei zu Supabase hoch
                 string fileUrl = await _supabaseService.UploadFileAsync(BLOCKS_BUCKET, tempFilePath, tempFileName);

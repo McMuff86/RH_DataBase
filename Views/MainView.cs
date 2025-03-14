@@ -406,11 +406,11 @@ namespace RH_DataBase.Views
                         _progressBar.Indeterminate = false;
                         _testConnectionButton.Enabled = true;
                     });
-            }
-            catch (Exception ex)
-                {
-                    // UI-Updates auf dem UI-Thread ausführen
-                    Application.Instance.Invoke(() =>
+                }
+                catch (Exception ex)
+                    {
+                        // UI-Updates auf dem UI-Thread ausführen
+                        Application.Instance.Invoke(() =>
             {
                 _statusLabel.Text = $"Fehler: {ex.Message}";
                 MessageBox.Show(
@@ -961,7 +961,7 @@ namespace RH_DataBase.Views
         }
 
         // Neue Methode zum Erstellen eines Blocks aus ausgewählten Objekten
-        private void CreateBlockFromSelection()
+        private async void CreateBlockFromSelection()
         {
             try
             {
@@ -998,41 +998,94 @@ namespace RH_DataBase.Views
                     return;
                 }
 
+                RhinoApp.WriteLine($"Ausgewählte Objekte: {objectCount}");
+
                 // Sammle Object-IDs
                 var objectIds = new List<Guid>();
                 foreach (var obj in selectedObjects)
                 {
                     objectIds.Add(obj.Id);
+                    RhinoApp.WriteLine($"  - Objekt hinzugefügt: {obj.Id} ({obj.Geometry?.GetType().Name ?? "unbekannt"})");
                 }
 
                 // Erstelle einen Dialog für die Block-Erstellung
                 var dialog = new Dialog
                 {
                     Title = "Block aus Auswahl erstellen",
-                    MinimumSize = new Size(500, 400)
+                    MinimumSize = new Size(500, 400),
+                    Padding = new Padding(10)
                 };
 
-                // Eingabefelder für Block-Metadaten
-                var nameTextBox = new TextBox();
-                var descriptionTextBox = new TextBox();
-                var categoryTextBox = new TextBox();
-                var materialTextBox = new TextBox();
+                // Beschreibungstext
+                var descriptionPanel = new Panel();
+                var descriptionLabel = new Label
+                {
+                    Text = $"Sie erstellen einen Block aus {objectCount} ausgewählten Objekten." +
+                           $"\nBitte geben Sie die Metadaten für den Block ein."
+                };
+                descriptionPanel.Content = descriptionLabel;
+
+                // Eingabefelder für Block-Metadaten mit Labels
+                var nameLabel = new Label { Text = "Name:" };
+                var nameTextBox = new TextBox { PlaceholderText = "Name des Blocks" };
+                
+                var descriptionTextLabel = new Label { Text = "Beschreibung:" };
+                var descriptionTextBox = new TextBox { PlaceholderText = "Beschreibung des Blocks" };
+                
+                var categoryLabel = new Label { Text = "Kategorie:" };
+                var categoryTextBox = new TextBox { PlaceholderText = "z.B. Möbel, Armaturen, etc." };
+                
+                var materialLabel = new Label { Text = "Material:" };
+                var materialTextBox = new TextBox { PlaceholderText = "z.B. Holz, Metall, etc." };
 
                 // OK und Abbrechen Buttons
                 var okButton = new Button { Text = "Erstellen" };
                 var cancelButton = new Button { Text = "Abbrechen" };
 
-                cancelButton.Click += (sender, e) => dialog.Close();
+                // Layout erstellen
+                var layout = new TableLayout
+                {
+                    Padding = new Padding(10),
+                    Spacing = new Size(5, 10),
+                    Rows =
+                    {
+                        new TableRow(descriptionPanel),
+                        new TableRow(nameLabel),
+                        new TableRow(nameTextBox),
+                        new TableRow(descriptionTextLabel),
+                        new TableRow(descriptionTextBox),
+                        new TableRow(categoryLabel),
+                        new TableRow(categoryTextBox),
+                        new TableRow(materialLabel),
+                        new TableRow(materialTextBox),
+                        new TableRow(
+                            new TableLayout
+                            {
+                                Padding = new Padding(0, 10, 0, 0),
+                                Spacing = new Size(5, 0),
+                                Rows = { new TableRow(null, cancelButton, okButton) }
+                            }
+                        )
+                    }
+                };
+
+                dialog.Content = layout;
+                
+                // Event-Handler
+                cancelButton.Click += (sender, e) => 
+                {
+                    RhinoApp.WriteLine("Block-Erstellung abgebrochen");
+                    dialog.Close();
+                };
+                
                 okButton.Click += async (sender, e) => 
                 {
                     try
                     {
-                        dialog.Close();
-                        
-                        string name = nameTextBox.Text;
-                        string description = descriptionTextBox.Text;
-                        string category = categoryTextBox.Text;
-                        string material = materialTextBox.Text;
+                        string name = nameTextBox.Text.Trim();
+                        string description = descriptionTextBox.Text.Trim();
+                        string category = categoryTextBox.Text.Trim();
+                        string material = materialTextBox.Text.Trim();
                         
                         if (string.IsNullOrWhiteSpace(name))
                         {
@@ -1045,118 +1098,98 @@ namespace RH_DataBase.Views
                             return;
                         }
                         
+                        // Dialog schließen, bevor wir mit der Abfrage fortfahren
+                        dialog.Close();
+                        
                         // Frage nach dem Basispunkt für den Block
                         RhinoApp.WriteLine("Wählen Sie den Basispunkt für den Block:");
                         Point3d basePoint;
                         var getBasePointResult = Rhino.Input.RhinoGet.GetPoint("Basispunkt für den Block wählen", false, out basePoint);
                         if (getBasePointResult != Rhino.Commands.Result.Success)
                         {
+                            RhinoApp.WriteLine("Block-Erstellung abgebrochen: Kein Basispunkt ausgewählt");
                             _statusLabel.Text = "Block-Erstellung abgebrochen";
                             return;
                         }
                         
+                        RhinoApp.WriteLine($"Basispunkt ausgewählt: {basePoint}");
+                        
                         // UI aktualisieren
-                        _statusLabel.Text = $"Erstelle Block {name}...";
+                        _statusLabel.Text = $"Erstelle Block '{name}'...";
                         _progressBar.Indeterminate = true;
                         
-                        // Erstellung in separatem Thread
-                        await Task.Run(async () =>
+                        // Block erstellen und in die Datenbank speichern
+                        var savedPart = await _partsController.CreateBlockFromSelectionAsync(
+                            doc,
+                            objectIds,
+                            name,
+                            description,
+                            category,
+                            material,
+                            basePoint
+                        );
+                        
+                        // UI-Updates auf dem UI-Thread ausführen
+                        await Application.Instance.InvokeAsync(() =>
                         {
-                            try
+                            _progressBar.Indeterminate = false;
+                            
+                            if (savedPart != null)
                             {
-                                // Erstelle den Block und exportiere ihn
-                                var savedPart = await _partsController.CreateBlockFromSelectionAsync(
-                                    doc,
-                                    objectIds,
-                                    name,
-                                    description,
-                                    category,
-                                    material,
-                                    basePoint
-                                );
+                                _statusLabel.Text = $"Block '{name}' erfolgreich erstellt und gespeichert";
+                                RhinoApp.WriteLine($"Block '{name}' erfolgreich erstellt und in Datenbank gespeichert");
                                 
-                                // UI-Updates auf dem UI-Thread ausführen
-                                await Application.Instance.InvokeAsync(() =>
-                                {
-                                    _statusLabel.Text = $"Block {name} erfolgreich erstellt und exportiert";
-                                    _progressBar.Indeterminate = false;
-                                    
-                                    MessageBox.Show(
-                                        $"Block {name} wurde erfolgreich erstellt und als Teil exportiert.",
-                                        "Block-Erstellung erfolgreich",
-                                        MessageBoxButtons.OK,
-                                        MessageBoxType.Information
-                                    );
-                                    
-                                    // Aktualisiere die Teile-Liste
-                                    LoadDataAsync();
-                                });
+                                // Aktualisiere die Teileliste
+                                LoadDataAsync();
                             }
-                            catch (Exception ex)
+                            else
                             {
-                                // UI-Updates auf dem UI-Thread ausführen
-                                Application.Instance.Invoke(() =>
-                                {
-                                    _statusLabel.Text = $"Fehler bei der Block-Erstellung: {ex.Message}";
-                                    _progressBar.Indeterminate = false;
-                                    
-                                    MessageBox.Show(
-                                        $"Fehler bei der Block-Erstellung:\n{ex.Message}",
-                                        "Erstellungsfehler",
-                                        MessageBoxButtons.OK,
-                                        MessageBoxType.Error
-                                    );
-                                });
+                                _statusLabel.Text = "Fehler beim Erstellen des Blocks";
+                                MessageBox.Show(
+                                    "Der Block wurde erstellt, konnte aber nicht in der Datenbank gespeichert werden.",
+                                    "Fehler beim Speichern",
+                                    MessageBoxButtons.OK,
+                                    MessageBoxType.Error
+                                );
                             }
                         });
                     }
                     catch (Exception ex)
                     {
+                        _progressBar.Indeterminate = false;
+                        _statusLabel.Text = "Fehler bei der Block-Erstellung";
+                        
+                        RhinoApp.WriteLine($"Fehler bei der Block-Erstellung: {ex.Message}");
+                        if (ex.InnerException != null)
+                        {
+                            RhinoApp.WriteLine($"Details: {ex.InnerException.Message}");
+                        }
+                        
                         MessageBox.Show(
-                            $"Fehler: {ex.Message}",
+                            $"Fehler beim Erstellen des Blocks: {ex.Message}",
                             "Fehler",
                             MessageBoxButtons.OK,
                             MessageBoxType.Error
                         );
                     }
                 };
-
-                // Dialog-Layout erstellen
-                dialog.Content = new TableLayout
-                {
-                    Padding = new Padding(10),
-                    Spacing = new Size(5, 5),
-                    Rows =
-                    {
-                        new TableRow(new Label { Text = $"{objectCount} Objekte ausgewählt" }),
-                        new TableRow(new Label { Text = "Name:" }),
-                        new TableRow(nameTextBox),
-                        new TableRow(new Label { Text = "Beschreibung:" }),
-                        new TableRow(descriptionTextBox),
-                        new TableRow(new Label { Text = "Kategorie:" }),
-                        new TableRow(categoryTextBox),
-                        new TableRow(new Label { Text = "Material:" }),
-                        new TableRow(materialTextBox),
-                        null, // Abstand
-                        new TableRow(
-                            new StackLayout
-                            {
-                                Orientation = Orientation.Horizontal,
-                                Spacing = 5,
-                                Items = { null, okButton, cancelButton }
-                            }
-                        )
-                    }
-                };
-
+                
+                // Dialog anzeigen
                 dialog.ShowModal(this);
             }
             catch (Exception ex)
             {
-                _statusLabel.Text = $"Fehler: {ex.Message}";
+                _progressBar.Indeterminate = false;
+                _statusLabel.Text = "Fehler bei der Block-Erstellung";
+                
+                RhinoApp.WriteLine($"Fehler bei der Block-Erstellung: {ex.Message}");
+                if (ex.InnerException != null)
+                {
+                    RhinoApp.WriteLine($"Details: {ex.InnerException.Message}");
+                }
                 
                 MessageBox.Show(
-                    $"Fehler: {ex.Message}",
+                    $"Fehler beim Erstellen des Blocks: {ex.Message}",
                     "Fehler",
                     MessageBoxButtons.OK,
                     MessageBoxType.Error
