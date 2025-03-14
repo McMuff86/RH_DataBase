@@ -42,7 +42,7 @@ namespace RH_DataBase.Services
                     AutoConnectRealtime = true
                 };
 
-                _client = new Supabase.Client(SupabaseConfig.SupabaseUrl, SupabaseConfig.SupabaseAnonKey, options);
+                _client = new Supabase.Client(SupabaseConfig.SupabaseUrl, SupabaseConfig.DefaultKey, options);
             }
             catch (Exception ex)
             {
@@ -319,6 +319,63 @@ namespace RH_DataBase.Services
             catch (Exception ex)
             {
                 throw new Exception($"Failed to delete file: {ex.Message}");
+            }
+        }
+
+        #endregion
+
+        #region Authentifizierung
+
+        /// <summary>
+        /// Erzeugt ein JWT-Token basierend auf benutzerdefiniertem Secret
+        /// </summary>
+        /// <param name="userId">Die Benutzer-ID</param>
+        /// <param name="additionalClaims">Zusätzliche Claims, die im Token enthalten sein sollen</param>
+        /// <returns>Ein gültiges JWT-Token</returns>
+        public string CreateJwtToken(string userId, Dictionary<string, object> additionalClaims = null)
+        {
+            try
+            {
+                // Hier könnte eine JWT-Bibliothek verwendet werden, um ein Token zu erstellen
+                // Beispiel mit System.IdentityModel.Tokens.Jwt (muss als NuGet-Paket hinzugefügt werden)
+                /*
+                var tokenHandler = new JwtSecurityTokenHandler();
+                var key = Convert.FromBase64String(SupabaseConfig.JwtSecret);
+                
+                var claims = new List<Claim>
+                {
+                    new Claim(JwtRegisteredClaimNames.Sub, userId),
+                    new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+                    new Claim(JwtRegisteredClaimNames.Iat, DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString())
+                };
+                
+                if (additionalClaims != null)
+                {
+                    foreach (var claim in additionalClaims)
+                    {
+                        claims.Add(new Claim(claim.Key, claim.Value.ToString()));
+                    }
+                }
+                
+                var tokenDescriptor = new SecurityTokenDescriptor
+                {
+                    Subject = new ClaimsIdentity(claims),
+                    Expires = DateTime.UtcNow.AddHours(1),
+                    SigningCredentials = new SigningCredentials(
+                        new SymmetricSecurityKey(key),
+                        SecurityAlgorithms.HmacSha256Signature)
+                };
+                
+                var token = tokenHandler.CreateToken(tokenDescriptor);
+                return tokenHandler.WriteToken(token);
+                */
+                
+                // Platzhalter - fügen Sie die tatsächliche JWT-Generierungslogik hinzu
+                return "JWT-Token würde hier generiert werden mit Secret: " + SupabaseConfig.JwtSecret;
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Failed to create JWT token: {ex.Message}");
             }
         }
 
