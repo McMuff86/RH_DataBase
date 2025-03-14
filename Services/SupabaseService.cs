@@ -6,6 +6,7 @@ using Supabase.Gotrue;
 using Postgrest;
 using RH_DataBase.Models;
 using RH_DataBase.Config;
+using System.Linq;
 
 namespace RH_DataBase.Services
 {
@@ -226,6 +227,98 @@ namespace RH_DataBase.Services
             catch (Exception ex)
             {
                 throw new Exception($"Failed to delete drawing with ID {id}: {ex.Message}");
+            }
+        }
+
+        #endregion
+
+        #region File Storage Operations
+
+        /// <summary>
+        /// Erstellt einen Storage-Bucket, falls er noch nicht existiert
+        /// </summary>
+        public async Task<bool> CreateBucketIfNotExistsAsync(string bucketName, bool isPublic = true)
+        {
+            try
+            {
+                // Prüfe, ob der Bucket bereits existiert
+                var buckets = await _client.Storage.ListBuckets();
+                if (buckets.Any(b => b.Name == bucketName))
+                {
+                    return true; // Bucket existiert bereits
+                }
+                
+                // Erstelle den Bucket
+                await _client.Storage.CreateBucket(bucketName, new Supabase.Storage.BucketUpsertOptions
+                {
+                    Public = isPublic
+                });
+                
+                return true;
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Failed to create bucket: {ex.Message}");
+            }
+        }
+
+        public async Task<string> UploadFileAsync(string bucketName, string filePath, string fileName)
+        {
+            try
+            {
+                var fileBytes = System.IO.File.ReadAllBytes(filePath);
+                var response = await _client.Storage
+                    .From(bucketName)
+                    .Upload(fileBytes, fileName);
+                
+                // Generiere eine öffentliche URL für die Datei
+                var fileUrl = _client.Storage
+                    .From(bucketName)
+                    .GetPublicUrl(fileName);
+                
+                return fileUrl;
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Failed to upload file: {ex.Message}");
+            }
+        }
+
+        public async Task<string> DownloadFileAsync(string bucketName, string fileName, string destinationPath)
+        {
+            try
+            {
+                // Ältere Versionen der Supabase-Client-Bibliothek verwenden andere Parameter
+                // Prüfe zuerst, ob wir die File API korrekt aufrufen können
+                var fileData = await _client.Storage
+                    .From(bucketName)
+                    .Download(fileName, null);
+                
+                // Speichere die heruntergeladene Datei
+                System.IO.File.WriteAllBytes(destinationPath, fileData);
+                
+                return destinationPath;
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Failed to download file: {ex.Message}");
+            }
+        }
+
+        public async Task DeleteFileAsync(string bucketName, string fileName)
+        {
+            try
+            {
+                // Die Remove-Methode erwartet ein Array von Dateinamen
+                var fileNames = new List<string> { fileName };
+                
+                await _client.Storage
+                    .From(bucketName)
+                    .Remove(fileNames);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Failed to delete file: {ex.Message}");
             }
         }
 
