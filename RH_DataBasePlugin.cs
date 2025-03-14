@@ -31,26 +31,32 @@ namespace RH_DataBase
         /// </summary>
         protected override LoadReturnCode OnLoad(ref string errorMessage)
         {
-            // Prüfe, ob die Konfiguration aus .env.local erfolgreich geladen wurde
+            RhinoApp.WriteLine("Initialisiere Rhino-Supabase Plugin...");
+            
+            // Ausführliche Konfigurationsinformationen ausgeben
             try 
             {
-                // Zeige Konfigurationsstatus - nur Debug-Info, keine sensiblen Daten
-                bool supabaseUrlLoaded = !string.IsNullOrEmpty(Config.SupabaseConfig.SupabaseUrl);
-                bool anonKeyLoaded = !string.IsNullOrEmpty(Config.SupabaseConfig.SupabaseAnonKey);
-                bool serviceKeyLoaded = !string.IsNullOrEmpty(Config.SupabaseConfig.SupabaseServiceKey);
-                bool jwtSecretLoaded = !string.IsNullOrEmpty(Config.SupabaseConfig.JwtSecret);
+                // Detaillierte Konfiguration-Debug-Informationen ausgeben
+                Config.SupabaseConfig.PrintConfigStatus();
                 
-                RhinoApp.WriteLine($"Konfigurationsstatus: URL={supabaseUrlLoaded}, AnonKey={anonKeyLoaded}, ServiceKey={serviceKeyLoaded}, JWT={jwtSecretLoaded}");
-                
-                if (!anonKeyLoaded || !serviceKeyLoaded)
+                // Überprüfe, ob die Konfiguration gültig ist
+                if (string.IsNullOrEmpty(Config.SupabaseConfig.SupabaseUrl) || 
+                    (string.IsNullOrEmpty(Config.SupabaseConfig.SupabaseAnonKey) && 
+                     string.IsNullOrEmpty(Config.SupabaseConfig.SupabaseServiceKey)))
                 {
-                    RhinoApp.WriteLine("WARNUNG: Einige Konfigurationswerte konnten nicht aus .env.local geladen werden.");
-                    RhinoApp.WriteLine("Die .env.local-Datei sollte im Verzeichnis der Anwendung liegen.");
+                    RhinoApp.WriteLine("KRITISCHER FEHLER: Supabase-Konfiguration ist unvollständig.");
+                    RhinoApp.WriteLine("Weder Anon-Key noch Service-Key ist verfügbar.");
+                    errorMessage = "Supabase-Konfiguration fehlt. Bitte stellen Sie sicher, dass die .env.local-Datei korrekt eingerichtet ist.";
+                    return LoadReturnCode.ErrorShowDialog;
                 }
             }
             catch (Exception ex)
             {
                 RhinoApp.WriteLine($"Fehler beim Laden der Konfiguration: {ex.Message}");
+                if (ex.InnerException != null)
+                {
+                    RhinoApp.WriteLine($"  Details: {ex.InnerException.Message}");
+                }
             }
             
             // Test the database connection on plugin startup

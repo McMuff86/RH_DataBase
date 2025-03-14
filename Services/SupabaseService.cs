@@ -36,17 +36,86 @@ namespace RH_DataBase.Services
         {
             try
             {
+                if (string.IsNullOrEmpty(SupabaseConfig.SupabaseUrl))
+                {
+                    throw new InvalidOperationException("Die Supabase-URL ist nicht konfiguriert.");
+                }
+
+                if (string.IsNullOrEmpty(SupabaseConfig.DefaultKey))
+                {
+                    throw new InvalidOperationException("Der zu verwendende Schlüssel (DefaultKey) ist nicht konfiguriert.");
+                }
+
+                // Setze grundlegende Optionen für die Verbindung
                 var options = new SupabaseOptions
                 {
                     AutoRefreshToken = true,
                     AutoConnectRealtime = true
+                    // Die folgenden Optionen sind in der aktuellen Version nicht verfügbar
+                    // ShouldInitializeRealtime = true,
+                    // RealtimeTimeout = TimeSpan.FromSeconds(10)
                 };
 
+                // Client initialisieren und den Service-Role-Key verwenden
+                try 
+                {
+                    Rhino.RhinoApp.WriteLine($"Initialisiere Supabase-Client mit URL: {SupabaseConfig.SupabaseUrl}");
+                    Rhino.RhinoApp.WriteLine($"Verwende {(SupabaseConfig.DefaultKey == SupabaseConfig.SupabaseServiceKey ? "Service-Role-Key" : "Anon-Key")} für Authentifizierung");
+                }
+                catch
+                {
+                    Console.WriteLine($"Initialisiere Supabase-Client mit URL: {SupabaseConfig.SupabaseUrl}");
+                }
+                
                 _client = new Supabase.Client(SupabaseConfig.SupabaseUrl, SupabaseConfig.DefaultKey, options);
+                
+                // Versuche, eine einfache Datenbank-Abfrage durchzuführen, um die Verbindung zu testen
+                Task.Run(async () => {
+                    try 
+                    {
+                        // Statt GetClientHealth, führen wir eine einfache Abfrage zur Überprüfung durch
+                        var testQuery = await _client.From<RH_DataBase.Models.Part>().Select("id").Limit(1).Get();
+                        try 
+                        {
+                            Rhino.RhinoApp.WriteLine($"Supabase-Verbindungstest erfolgreich: {testQuery.ResponseMessage.IsSuccessStatusCode}");
+                        }
+                        catch
+                        {
+                            Console.WriteLine($"Supabase-Verbindungstest erfolgreich: {testQuery.ResponseMessage.IsSuccessStatusCode}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        try
+                        {
+                            Rhino.RhinoApp.WriteLine($"Warnung: Supabase-Verbindungstest fehlgeschlagen: {ex.Message}");
+                        }
+                        catch
+                        {
+                            Console.WriteLine($"Warnung: Supabase-Verbindungstest fehlgeschlagen: {ex.Message}");
+                        }
+                    }
+                });
             }
             catch (Exception ex)
             {
-                throw new Exception($"Failed to initialize Supabase client: {ex.Message}");
+                try
+                {
+                    Rhino.RhinoApp.WriteLine($"KRITISCH: Supabase-Client konnte nicht initialisiert werden: {ex.Message}");
+                    if (ex.InnerException != null)
+                    {
+                        Rhino.RhinoApp.WriteLine($"  Details: {ex.InnerException.Message}");
+                    }
+                }
+                catch
+                {
+                    Console.WriteLine($"KRITISCH: Supabase-Client konnte nicht initialisiert werden: {ex.Message}");
+                    if (ex.InnerException != null)
+                    {
+                        Console.WriteLine($"  Details: {ex.InnerException.Message}");
+                    }
+                }
+                throw new Exception($"Failed to initialize Supabase client: {ex.Message}", ex);
             }
         }
 
